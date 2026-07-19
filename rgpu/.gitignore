@@ -6,3 +6,6 @@ colab/rgpu_vk_probe
 **/*.pdb
 __pycache__/
 *.pyc
+renderd/win/*.exe
+controller/__pycache__/
+renderd/__pycache__/
