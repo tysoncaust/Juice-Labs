@@ -1,0 +1,8 @@
+# build artifacts
+proxy-d3d11/test/*.exe
+proxy-d3d11/**/*.o
+colab/rgpu_vk_probe
+**/*.obj
+**/*.pdb
+__pycache__/
+*.pyc
