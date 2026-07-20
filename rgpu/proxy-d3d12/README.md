@@ -35,13 +35,28 @@ serialize + remote later.**
       hooks reach the live game (our patched command-list `Close` hook fires every
       frame), proving the vtable hooking works on the real AAA UE5 title.
 
-      *TXR live-capture caveat (honest):* TXR bundles **UE4SS**, whose own D3D12 overlay
-      re-hooks the popular vtable slots (Draw/Dispatch/Barrier/ExecuteCommandLists)
-      AFTER us, superseding our hooks on those slots (Close, which mods don't touch,
-      still fires). UE5 Nanite/Lumen is also compute/mesh-shader-driven, so classic
-      `DrawInstanced` is rare. Capturing 100% of TXR's stream needs inline (MinHook-
-      style) hooks that survive vtable re-patching, or hook-ordering vs UE4SS — bounded
-      game-specific hardening, not a mechanism gap (the harness proves the mechanism).
+- [x] **Inline-hook hardening** (`src/rgpu_inlinehook.h`, `test/rgpu_inlinehook_test.cpp`).
+      A minimal, conservative x64 trampoline inline hooker: a 14-byte abs-JMP at the
+      function entry + a relocated prologue (RIP-relative disp32 / rel32 fixups, near-
+      target trampoline). It hooks the function BODY, so it SURVIVES a later vtable
+      re-patch by an overlay (UE4SS). Install is done with all other threads SUSPENDED
+      (MinHook-style) so writing live D3D12Core code pages can't corrupt a running
+      thread. **Verified in isolation:** the test proves the detour fires, the
+      trampoline calls the original, AND the hook survives a simulated vtable re-patch
+      (the UE4SS scenario). It also installs cleanly on live TXR D3D12Core functions
+      without destabilising the game (thread-freezing fixed an earlier boot-instability).
+
+      *TXR live-capture status (honest):* the tee mechanism + inline hardening are
+      proven, but **full TXR capture is NOT achieved**. Live diagnosis showed our
+      D3D12CreateDevice export IS called (4x) and we successfully hook that device's
+      vtable — yet NONE of its methods (`CheckFeatureSupport`, `CreateCommandQueue`/`1`,
+      `CreateCommandList`/`1`) ever fire while the game renders at ~110% GPU. Those 4
+      devices are throwaway feature-probes; TXR's real UE5 RHI device is created +
+      used through a path that bypasses the objects we intercept. Resolving it needs
+      live debugging (WinDbg breakpoints on `D3D12Core!CheckFeatureSupport`) to find
+      the real device object, or the deterministic-but-large full `ID3D12Device` COM
+      wrapper (returned from our `D3D12CreateDevice`, all versioned interfaces) so the
+      game holds OUR object and can't route around us. That is the remaining work.
 
 ## Remaining (step 2+ — the D3D12 body, in order)
 D3D12 has no immediate context; work is recorded into command lists and submitted

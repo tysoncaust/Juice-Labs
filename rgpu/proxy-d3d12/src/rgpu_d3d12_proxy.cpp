@@ -21,12 +21,14 @@
  * command stream and mark each ExecuteCommandLists submission. (Full remote replay
  * additionally needs the resource object-graph + handle translation - see README.) */
 #include <windows.h>
+#include <tlhelp32.h>
 #include <d3d12.h>
 #include <dxgi.h>
 #include <cstdio>
 #include <cstdarg>
 #include <cstring>
 #include <cstdint>
+#include "rgpu_inlinehook.h"
 #include "../../proto/rgpu_cmds.h"
 
 static HMODULE g_real = nullptr;
@@ -80,7 +82,9 @@ extern unsigned RGPU_SLOT_Device_CreateCommandQueue, RGPU_SLOT_Queue_ExecuteComm
     RGPU_SLOT_GCL_Close, RGPU_SLOT_GCL_DrawInstanced, RGPU_SLOT_GCL_DrawIndexedInstanced,
     RGPU_SLOT_GCL_Dispatch, RGPU_SLOT_GCL_CopyResource, RGPU_SLOT_GCL_ResourceBarrier,
     RGPU_SLOT_GCL_OMSetRenderTargets, RGPU_SLOT_GCL_ClearRenderTargetView, RGPU_SLOT_Factory_CreateDevice,
-    RGPU_SLOT_Device_CreateCommandList, RGPU_SLOT_Device4_CreateCommandList1, RGPU_SLOT_Device9_CreateCommandQueue1;
+    RGPU_SLOT_Device_CreateCommandList, RGPU_SLOT_Device4_CreateCommandList1, RGPU_SLOT_Device9_CreateCommandQueue1,
+    RGPU_SLOT_GCL_ExecuteIndirect, RGPU_SLOT_GCL6_DispatchMesh, RGPU_SLOT_GCL7_Barrier,
+    RGPU_SLOT_Device_CheckFeatureSupport;
 }
 
 static bool patch_slot(void *obj, size_t index, void *hook, void **orig) {
@@ -165,6 +169,29 @@ static HRESULT STDMETHODCALLTYPE h_Close(ID3D12GraphicsCommandList *This) {
     return o_Close(This); /* Close finalizes a list; the tee to this point is a submittable unit */
 }
 
+/* ---- newer UE5 5.x methods: enhanced barriers, mesh dispatch, indirect --- */
+typedef void (STDMETHODCALLTYPE *fnBarrier)(ID3D12GraphicsCommandList7 *, UINT32, const void *);
+typedef void (STDMETHODCALLTYPE *fnDispatchMesh)(ID3D12GraphicsCommandList6 *, UINT, UINT, UINT);
+typedef void (STDMETHODCALLTYPE *fnExecuteIndirect)(ID3D12GraphicsCommandList *, ID3D12CommandSignature *, UINT, ID3D12Resource *, UINT64, ID3D12Resource *, UINT64);
+static fnBarrier o_Barrier; static fnDispatchMesh o_DispatchMesh; static fnExecuteIndirect o_ExecuteIndirect;
+
+static void STDMETHODCALLTYPE h_Barrier(ID3D12GraphicsCommandList7 *This, UINT32 numGroups, const void *groups) {
+    LONG c = InterlockedIncrement(&g_barriers);
+    if (c == 1) rgpu_log("FIRST Barrier (enhanced/GCL7) hooked call -> capturing TXR's real barrier stream");
+    uint32_t n = numGroups; tee(RGPU_CMD_RESOURCE_BARRIER, oid(This), &n, sizeof(n));
+    o_Barrier(This, numGroups, groups);
+}
+static void STDMETHODCALLTYPE h_DispatchMesh(ID3D12GraphicsCommandList6 *This, UINT x, UINT y, UINT z) {
+    if (InterlockedIncrement(&g_dispatch) == 1) rgpu_log("FIRST DispatchMesh (GCL6) hooked call -> capturing Nanite mesh work");
+    rgpu_args_dispatch a{x, y, z}; tee(RGPU_CMD_DISPATCH, oid(This), &a, sizeof(a));
+    o_DispatchMesh(This, x, y, z);
+}
+static void STDMETHODCALLTYPE h_ExecuteIndirect(ID3D12GraphicsCommandList *This, ID3D12CommandSignature *sig, UINT maxCount, ID3D12Resource *args, UINT64 argOff, ID3D12Resource *cnt, UINT64 cntOff) {
+    if (InterlockedIncrement(&g_draws) == 1) rgpu_log("FIRST ExecuteIndirect hooked call -> capturing GPU-driven draws");
+    uint32_t m = maxCount; tee(RGPU_CMD_DRAW, oid(This), &m, sizeof(m));
+    o_ExecuteIndirect(This, sig, maxCount, args, argOff, cnt, cntOff);
+}
+
 /* Patch the shared ID3D12GraphicsCommandList vtable (caller owns the list ref). */
 static void hook_gcl_vtable(ID3D12GraphicsCommandList *gl) {
     patch_slot(gl, RGPU_SLOT_GCL_DrawInstanced,         (void *)h_DrawInstanced,        (void **)&o_DrawInstanced);
@@ -191,84 +218,114 @@ static void STDMETHODCALLTYPE h_ExecuteCommandLists(ID3D12CommandQueue *This, UI
     }
 }
 
-/* Patch the ExecuteCommandLists / recording slots on a specific object's vtable,
- * re-arming only when a genuinely new vtable pointer appears (the game may use a
- * different D3D12Core than our throwaway probe). */
-static void arm_queue_vtable(ID3D12CommandQueue *q, const char *src) {
-    void *v = *(void **)q;
-    if (v == g_armed_queue_vtbl) return;
-    if (patch_slot(q, RGPU_SLOT_Queue_ExecuteCommandLists, (void *)h_ExecuteCommandLists, (void **)&o_ExecuteCommandLists)) {
-        g_armed_queue_vtbl = v;
-        rgpu_log("armed ExecuteCommandLists from %s (queue vtbl=%p)", src, v);
-    }
-}
-static void arm_list_vtable(ID3D12GraphicsCommandList *gl, const char *src) {
-    void *v = *(void **)gl;
-    if (v == g_armed_list_vtbl) return;
-    hook_gcl_vtable(gl); g_armed_list_vtbl = v;
-    rgpu_log("armed command-list recording from %s (list vtbl=%p)", src, v);
-}
-static void arm_queue_from_any(void *obj) {
-    ID3D12CommandQueue *q = nullptr;
-    if (SUCCEEDED(((IUnknown *)obj)->QueryInterface(__uuidof(ID3D12CommandQueue), (void **)&q)) && q) { arm_queue_vtable(q, "game queue"); q->Release(); }
-}
-static void arm_list_from_any(void *obj) {
-    ID3D12GraphicsCommandList *gl = nullptr;
-    if (SUCCEEDED(((IUnknown *)obj)->QueryInterface(__uuidof(ID3D12GraphicsCommandList), (void **)&gl)) && gl) { arm_list_vtable(gl, "game list"); gl->Release(); }
+/* Read the function pointer at a vtable slot of a fresh (un-tampered) object. */
+static void *vslot(void *obj, unsigned idx) { return (*(void ***)obj)[idx]; }
+
+/* Inline-hook a target function ONCE (guarded by *orig, which becomes the
+ * trampoline that calls the original). INLINE hooking rewrites the function BODY,
+ * so a third-party overlay (UE4SS) that re-patches the same vtable slot afterwards
+ * cannot bypass us — the reason plain vtable hooking failed to capture TXR. */
+static void arm_inline_once(void *fn, void *detour, void **orig, const char *name) {
+    if (*orig) return;                    /* already inline-hooked */
+    void *tramp = nullptr;
+    if (rgpu_inline_hook(fn, detour, &tramp)) { *orig = tramp; rgpu_log("inline-hooked %s @ %p", name, fn); }
+    else rgpu_log("inline-hook ABORTED for %s @ %p (prologue not relocatable; left unhooked)", name, fn);
 }
 
-/* Hooks on the DEVICE's object-creation methods, so we patch the vtable of the
- * game's ACTUAL queues/lists - covering the Agility CreateCommandQueue1 /
- * CreateCommandList1 paths UE5 uses (not just the base methods). */
+/* Suspend every OTHER thread in the process so writing D3D12Core code pages can't
+ * race a thread executing the function being patched (the crash that boot-looped
+ * TXR). MinHook-style. While frozen we must NOT touch the CRT heap (malloc / fopen)
+ * or we could deadlock on a lock a frozen thread holds — so no logging/allocation
+ * there; rgpu_inline_hook uses only VirtualAlloc/Protect syscalls. */
+static HANDLE g_frozen[4096]; static int g_nfrozen = 0;
+static void rgpu_freeze_other_threads() {
+    g_nfrozen = 0;
+    DWORD pid = GetCurrentProcessId(), tid = GetCurrentThreadId();
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+    if (snap == INVALID_HANDLE_VALUE) return;
+    THREADENTRY32 te; te.dwSize = sizeof(te);
+    if (Thread32First(snap, &te)) do {
+        if (te.th32OwnerProcessID == pid && te.th32ThreadID != tid) {
+            HANDLE h = OpenThread(THREAD_SUSPEND_RESUME, FALSE, te.th32ThreadID);
+            if (h) { if (SuspendThread(h) != (DWORD)-1 && g_nfrozen < 4096) g_frozen[g_nfrozen++] = h; else CloseHandle(h); }
+        }
+    } while (Thread32Next(snap, &te));
+    CloseHandle(snap);
+}
+static void rgpu_resume_other_threads() {
+    for (int i = 0; i < g_nfrozen; i++) { ResumeThread(g_frozen[i]); CloseHandle(g_frozen[i]); }
+    g_nfrozen = 0;
+}
+struct HookItem { void *fn; void *detour; void **orig; const char *name; };
+static void install_batch_frozen(HookItem *items, int n) {
+    if (!n) return;
+    rgpu_freeze_other_threads();
+    for (int i = 0; i < n; i++) { void *tr = nullptr; if (rgpu_inline_hook(items[i].fn, items[i].detour, &tr)) *items[i].orig = tr; }
+    rgpu_resume_other_threads();
+    for (int i = 0; i < n; i++) rgpu_log("%s %s @ %p", *items[i].orig ? "inline-hooked" : "inline-hook ABORTED for", items[i].name, items[i].fn);
+}
+
+/* Inline-hook the ExecuteCommandLists / recording functions read from the GAME's
+ * ACTUAL objects (their concrete D3D12Core class can differ from a base throwaway
+ * list). Installed as a thread-frozen batch so the live runtime isn't corrupted. */
+static void arm_queue_functions(ID3D12CommandQueue *q) {
+    if (o_ExecuteCommandLists) return;
+    HookItem it[1] = {{ vslot(q, RGPU_SLOT_Queue_ExecuteCommandLists), (void *)h_ExecuteCommandLists, (void **)&o_ExecuteCommandLists, "ExecuteCommandLists" }};
+    install_batch_frozen(it, 1);
+}
+static void arm_list_functions(ID3D12GraphicsCommandList *list) {
+    HookItem it[20]; int n = 0;
+    auto add = [&](unsigned slot, void *det, void **orig, const char *nm) { if (!*orig && n < 20) it[n++] = { vslot(list, slot), det, orig, nm }; };
+    add(RGPU_SLOT_GCL_DrawInstanced,         (void *)h_DrawInstanced,        (void **)&o_DrawInstanced,        "DrawInstanced");
+    add(RGPU_SLOT_GCL_DrawIndexedInstanced,  (void *)h_DrawIndexedInstanced, (void **)&o_DrawIndexedInstanced, "DrawIndexedInstanced");
+    add(RGPU_SLOT_GCL_Dispatch,              (void *)h_Dispatch,             (void **)&o_Dispatch,             "Dispatch");
+    add(RGPU_SLOT_GCL_ResourceBarrier,       (void *)h_ResourceBarrier,      (void **)&o_ResourceBarrier,      "ResourceBarrier");
+    add(RGPU_SLOT_GCL_ClearRenderTargetView, (void *)h_ClearRTV,             (void **)&o_ClearRTV,             "ClearRenderTargetView");
+    add(RGPU_SLOT_GCL_OMSetRenderTargets,    (void *)h_OMSetRenderTargets,   (void **)&o_OMSetRenderTargets,   "OMSetRenderTargets");
+    add(RGPU_SLOT_GCL_CopyResource,          (void *)h_CopyResource,         (void **)&o_CopyResource,         "CopyResource");
+    add(RGPU_SLOT_GCL_ExecuteIndirect,       (void *)h_ExecuteIndirect,      (void **)&o_ExecuteIndirect,      "ExecuteIndirect");
+    ID3D12GraphicsCommandList6 *gl6 = nullptr;
+    if (SUCCEEDED(list->QueryInterface(__uuidof(ID3D12GraphicsCommandList6), (void **)&gl6)) && gl6) { add(RGPU_SLOT_GCL6_DispatchMesh, (void *)h_DispatchMesh, (void **)&o_DispatchMesh, "DispatchMesh"); gl6->Release(); }
+    ID3D12GraphicsCommandList7 *gl7 = nullptr;
+    if (SUCCEEDED(list->QueryInterface(__uuidof(ID3D12GraphicsCommandList7), (void **)&gl7)) && gl7) { add(RGPU_SLOT_GCL7_Barrier, (void *)h_Barrier, (void **)&o_Barrier, "Barrier(enhanced)"); gl7->Release(); }
+    install_batch_frozen(it, n);
+}
+static void arm_queue_from_any(void *o) { ID3D12CommandQueue *q=nullptr; if (o && SUCCEEDED(((IUnknown*)o)->QueryInterface(__uuidof(ID3D12CommandQueue),(void**)&q))&&q){ arm_queue_functions(q); q->Release(); } }
+static void arm_list_from_any(void *o)  { ID3D12GraphicsCommandList *l=nullptr; if (o && SUCCEEDED(((IUnknown*)o)->QueryInterface(__uuidof(ID3D12GraphicsCommandList),(void**)&l))&&l){ arm_list_functions(l); l->Release(); } }
+
+/* Vtable hooks on the DEVICE's create methods (device vtable is not contended by
+ * overlays) so we see the game's REAL queues/lists and inline-hook THEIR functions. */
 typedef HRESULT (STDMETHODCALLTYPE *fnDevCCQ)(ID3D12Device *, const D3D12_COMMAND_QUEUE_DESC *, REFIID, void **);
 typedef HRESULT (STDMETHODCALLTYPE *fnDevCCQ1)(ID3D12Device9 *, const D3D12_COMMAND_QUEUE_DESC *, REFIID, REFIID, void **);
 typedef HRESULT (STDMETHODCALLTYPE *fnDevCCL)(ID3D12Device *, UINT, D3D12_COMMAND_LIST_TYPE, ID3D12CommandAllocator *, ID3D12PipelineState *, REFIID, void **);
 typedef HRESULT (STDMETHODCALLTYPE *fnDevCCL1)(ID3D12Device4 *, UINT, D3D12_COMMAND_LIST_TYPE, D3D12_COMMAND_LIST_FLAGS, REFIID, void **);
-static fnDevCCQ  o_DevCCQ;  static fnDevCCQ1 o_DevCCQ1;  static fnDevCCL o_DevCCL;  static fnDevCCL1 o_DevCCL1;
-
-static HRESULT STDMETHODCALLTYPE h_DevCCQ(ID3D12Device *This, const D3D12_COMMAND_QUEUE_DESC *d, REFIID riid, void **pp) {
-    HRESULT hr = o_DevCCQ(This, d, riid, pp); if (SUCCEEDED(hr) && pp && *pp) arm_queue_from_any(*pp); return hr;
-}
-static HRESULT STDMETHODCALLTYPE h_DevCCQ1(ID3D12Device9 *This, const D3D12_COMMAND_QUEUE_DESC *d, REFIID cr, REFIID riid, void **pp) {
-    HRESULT hr = o_DevCCQ1(This, d, cr, riid, pp); if (SUCCEEDED(hr) && pp && *pp) arm_queue_from_any(*pp); return hr;
-}
-static HRESULT STDMETHODCALLTYPE h_DevCCL(ID3D12Device *This, UINT nm, D3D12_COMMAND_LIST_TYPE t, ID3D12CommandAllocator *a, ID3D12PipelineState *ps, REFIID riid, void **pp) {
-    HRESULT hr = o_DevCCL(This, nm, t, a, ps, riid, pp); if (SUCCEEDED(hr) && pp && *pp) arm_list_from_any(*pp); return hr;
-}
-static HRESULT STDMETHODCALLTYPE h_DevCCL1(ID3D12Device4 *This, UINT nm, D3D12_COMMAND_LIST_TYPE t, D3D12_COMMAND_LIST_FLAGS f, REFIID riid, void **pp) {
-    HRESULT hr = o_DevCCL1(This, nm, t, f, riid, pp); if (SUCCEEDED(hr) && pp && *pp) arm_list_from_any(*pp); return hr;
-}
+static fnDevCCQ o_DevCCQ; static fnDevCCQ1 o_DevCCQ1; static fnDevCCL o_DevCCL; static fnDevCCL1 o_DevCCL1;
+static void once_log(volatile LONG *g, const char *m) { if (InterlockedCompareExchange(g, 1, 0) == 0) rgpu_log("%s", m); }
+static volatile LONG l_ccq=0, l_ccq1=0, l_ccl=0, l_ccl1=0, l_cfs=0;
+typedef HRESULT (STDMETHODCALLTYPE *fnCFS)(ID3D12Device *, D3D12_FEATURE, void *, UINT);
+static fnCFS o_CFS;
+static HRESULT STDMETHODCALLTYPE h_CFS(ID3D12Device *T, D3D12_FEATURE f, void *d, UINT n){ once_log(&l_cfs,"game USES our hooked device (CheckFeatureSupport fired) -> device object is right"); return o_CFS(T,f,d,n); }
+static HRESULT STDMETHODCALLTYPE h_DevCCQ(ID3D12Device *T, const D3D12_COMMAND_QUEUE_DESC *d, REFIID r, void **pp){ once_log(&l_ccq,"game called CreateCommandQueue (base)"); HRESULT hr=o_DevCCQ(T,d,r,pp); if(SUCCEEDED(hr)&&pp)arm_queue_from_any(*pp); return hr; }
+static HRESULT STDMETHODCALLTYPE h_DevCCQ1(ID3D12Device9 *T, const D3D12_COMMAND_QUEUE_DESC *d, REFIID c, REFIID r, void **pp){ once_log(&l_ccq1,"game called CreateCommandQueue1 (Agility)"); HRESULT hr=o_DevCCQ1(T,d,c,r,pp); if(SUCCEEDED(hr)&&pp)arm_queue_from_any(*pp); return hr; }
+static HRESULT STDMETHODCALLTYPE h_DevCCL(ID3D12Device *T, UINT nm, D3D12_COMMAND_LIST_TYPE ty, ID3D12CommandAllocator *a, ID3D12PipelineState *ps, REFIID r, void **pp){ once_log(&l_ccl,"game called CreateCommandList (base)"); HRESULT hr=o_DevCCL(T,nm,ty,a,ps,r,pp); if(SUCCEEDED(hr)&&pp)arm_list_from_any(*pp); return hr; }
+static HRESULT STDMETHODCALLTYPE h_DevCCL1(ID3D12Device4 *T, UINT nm, D3D12_COMMAND_LIST_TYPE ty, D3D12_COMMAND_LIST_FLAGS f, REFIID r, void **pp){ once_log(&l_ccl1,"game called CreateCommandList1 (Agility)"); HRESULT hr=o_DevCCL1(T,nm,ty,f,r,pp); if(SUCCEEDED(hr)&&pp)arm_list_from_any(*pp); return hr; }
 
 static void *g_hooked_dev_vtbl = nullptr;
 static void arm_from_device(ID3D12Device *dev, const char *which) {
-    /* 1) hook the device's create methods so we patch the game's real objects */
     void *dv = *(void **)dev;
-    if (dv != g_hooked_dev_vtbl) {
-        g_hooked_dev_vtbl = dv;
-        patch_slot(dev, RGPU_SLOT_Device_CreateCommandQueue, (void *)h_DevCCQ, (void **)&o_DevCCQ);
-        patch_slot(dev, RGPU_SLOT_Device_CreateCommandList,  (void *)h_DevCCL, (void **)&o_DevCCL);
-        ID3D12Device9 *d9 = nullptr;
-        if (SUCCEEDED(dev->QueryInterface(__uuidof(ID3D12Device9), (void **)&d9)) && d9) {
-            patch_slot(dev, RGPU_SLOT_Device9_CreateCommandQueue1, (void *)h_DevCCQ1, (void **)&o_DevCCQ1); d9->Release();
-        }
-        ID3D12Device4 *d4 = nullptr;
-        if (SUCCEEDED(dev->QueryInterface(__uuidof(ID3D12Device4), (void **)&d4)) && d4) {
-            patch_slot(dev, RGPU_SLOT_Device4_CreateCommandList1, (void *)h_DevCCL1, (void **)&o_DevCCL1); d4->Release();
-        }
-        rgpu_log("hooked %s device create methods (CCQ/CCL/CCQ1/CCL1) on dev vtbl=%p", which, dv);
-    }
-    /* 2) also arm immediately from throwaway objects (covers games using base methods) */
-    D3D12_COMMAND_QUEUE_DESC qd{}; qd.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-    ID3D12CommandQueue *q = nullptr;
-    if (SUCCEEDED(dev->CreateCommandQueue(&qd, __uuidof(ID3D12CommandQueue), (void **)&q)) && q) { arm_queue_vtable(q, "throwaway"); q->Release(); }
-    ID3D12CommandAllocator *alloc = nullptr; ID3D12GraphicsCommandList *list = nullptr;
-    if (SUCCEEDED(dev->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void **)&alloc)) && alloc) {
-        if (SUCCEEDED(dev->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, alloc, nullptr,
-                                             __uuidof(ID3D12GraphicsCommandList), (void **)&list)) && list) {
-            arm_list_vtable(list, "throwaway"); list->Close(); list->Release();
-        }
-        alloc->Release();
-    }
+    if (dv == g_hooked_dev_vtbl) return;               /* device vtable already hooked */
+    g_hooked_dev_vtbl = dv;
+    patch_slot(dev, RGPU_SLOT_Device_CheckFeatureSupport, (void *)h_CFS, (void **)&o_CFS);
+    bool pq = patch_slot(dev, RGPU_SLOT_Device_CreateCommandQueue, (void *)h_DevCCQ, (void **)&o_DevCCQ);
+    bool pl = patch_slot(dev, RGPU_SLOT_Device_CreateCommandList,  (void *)h_DevCCL, (void **)&o_DevCCL);
+    bool pq1 = false, pl1 = false;
+    ID3D12Device9 *d9 = nullptr;
+    if (SUCCEEDED(dev->QueryInterface(__uuidof(ID3D12Device9), (void **)&d9)) && d9) { pq1 = patch_slot(dev, RGPU_SLOT_Device9_CreateCommandQueue1, (void *)h_DevCCQ1, (void **)&o_DevCCQ1); d9->Release(); }
+    ID3D12Device4 *d4 = nullptr;
+    if (SUCCEEDED(dev->QueryInterface(__uuidof(ID3D12Device4), (void **)&d4)) && d4) { pl1 = patch_slot(dev, RGPU_SLOT_Device4_CreateCommandList1, (void *)h_DevCCL1, (void **)&o_DevCCL1); d4->Release(); }
+    rgpu_log("armed %s device dev=%p vtbl=%p: patch CCQ=%d CCL=%d CCQ1=%d CCL1=%d (slots %u/%u/%u/%u)", which, (void*)dev, dv,
+             pq, pl, pq1, pl1, RGPU_SLOT_Device_CreateCommandQueue, RGPU_SLOT_Device_CreateCommandList,
+             RGPU_SLOT_Device9_CreateCommandQueue1, RGPU_SLOT_Device4_CreateCommandList1);
 }
 
 static bool adapter_is_warp(IUnknown *adapter) {

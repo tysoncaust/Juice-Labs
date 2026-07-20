@@ -15,6 +15,7 @@ unsigned RGPU_SLOT_Device_CreateCommandQueue   = SLOT(ID3D12DeviceVtbl, CreateCo
 unsigned RGPU_SLOT_Device_CreateCommandList    = SLOT(ID3D12DeviceVtbl, CreateCommandList);
 unsigned RGPU_SLOT_Device4_CreateCommandList1  = SLOT(ID3D12Device4Vtbl, CreateCommandList1);
 unsigned RGPU_SLOT_Device9_CreateCommandQueue1 = SLOT(ID3D12Device9Vtbl, CreateCommandQueue1);
+unsigned RGPU_SLOT_Device_CheckFeatureSupport  = SLOT(ID3D12DeviceVtbl, CheckFeatureSupport);
 unsigned RGPU_SLOT_Queue_ExecuteCommandLists = SLOT(ID3D12CommandQueueVtbl, ExecuteCommandLists);
 unsigned RGPU_SLOT_GCL_Close                 = SLOT(ID3D12GraphicsCommandListVtbl, Close);
 unsigned RGPU_SLOT_GCL_DrawInstanced         = SLOT(ID3D12GraphicsCommandListVtbl, DrawInstanced);
@@ -24,5 +25,8 @@ unsigned RGPU_SLOT_GCL_CopyResource          = SLOT(ID3D12GraphicsCommandListVtb
 unsigned RGPU_SLOT_GCL_ResourceBarrier       = SLOT(ID3D12GraphicsCommandListVtbl, ResourceBarrier);
 unsigned RGPU_SLOT_GCL_OMSetRenderTargets    = SLOT(ID3D12GraphicsCommandListVtbl, OMSetRenderTargets);
 unsigned RGPU_SLOT_GCL_ClearRenderTargetView = SLOT(ID3D12GraphicsCommandListVtbl, ClearRenderTargetView);
+unsigned RGPU_SLOT_GCL_ExecuteIndirect       = SLOT(ID3D12GraphicsCommandListVtbl, ExecuteIndirect);
+unsigned RGPU_SLOT_GCL6_DispatchMesh         = SLOT(ID3D12GraphicsCommandList6Vtbl, DispatchMesh);   /* mesh shaders (Nanite) */
+unsigned RGPU_SLOT_GCL7_Barrier              = SLOT(ID3D12GraphicsCommandList7Vtbl, Barrier);         /* enhanced barriers (UE5 5.x) */
 unsigned RGPU_SLOT_Factory_CreateDevice      = SLOT(ID3D12DeviceFactoryVtbl, CreateDevice);
 }
