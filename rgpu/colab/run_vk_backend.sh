@@ -10,7 +10,7 @@ nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader ||
 
 echo "===== 1. NVIDIA Vulkan userspace (matching driver branch) + deps ====="
 DEBIAN_FRONTEND=noninteractive bash rgpu/colab/install_nvidia_vulkan.sh || echo "(hardware Vulkan userspace install failed; will fall back to software)"
-apt-get -qq install -y build-essential ffmpeg >/dev/null 2>&1 || true
+apt-get -qq install -y build-essential ffmpeg libvulkan-dev >/dev/null 2>&1 || true
 
 # Prefer the NVIDIA ICD explicitly if it was installed (safer than removing mesa).
 ICD="$(find /usr/share/vulkan/icd.d /etc/vulkan/icd.d -maxdepth 1 -type f -iname '*nvidia*.json' 2>/dev/null | head -n1)"
