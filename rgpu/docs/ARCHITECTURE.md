@@ -141,17 +141,17 @@ STOP rendering, not fall back locally.
       unchanged on native D3D12 through it** — ATTACH + 4× `D3D12CreateDevice` (FL 12_0)
       S_OK, responsive rendering (GPU 3D ~93%, ~2.7 GB VRAM). Stops forcing `-d3d11`.
 
-- [x] **Linux Vulkan backend + H.264 encode** (`rgpu/renderd/linux/`, `rgpu/colab/run_vk_backend.sh`).
-      `rgpu_renderd_vk.cpp` consumes the rgpu protocol on Vulkan (CREATE_TEXTURE_2D/
-      CLEAR_RTV/PRESENT) — the Vulkan counterpart of the D3D11 reference renderer.
-      **Verified on a Colab T4:** protocol → render → readback returns the exact
-      cleared pixel; the frame H.264-encodes both via libx264 AND via **h264_nvenc on
-      the T4's NVENC hardware** (h264, 256×256, 60 frames). NOTE: the *render* ran on
-      Mesa llvmpipe (software Vulkan) because Colab's compute-only driver doesn't
-      export the NVIDIA Vulkan ICD entry (`vkCreateInstance` → INCOMPATIBLE_DRIVER) —
-      a Colab limitation, not an rgpu bug. Real-GPU render is already proven via the
-      Windows D3D11 reference renderer on the RTX; a Vulkan GPU backend needs a cloud
-      GPU VM with the full NVIDIA driver. See `rgpu/renderd/linux/README.md`.
+- [x] **Linux Vulkan backend + H.264 encode — verified on the real Colab T4**
+      (`rgpu/renderd/linux/`, `rgpu/colab/`). `rgpu_renderd_vk.cpp` is a fully
+      offscreen (no swapchain/surface) Vulkan renderer consuming the rgpu protocol —
+      the Vulkan counterpart of the D3D11 reference renderer, plus a benchmark mode
+      (GPU timestamp queries). After installing `libnvidia-gl-<branch>`
+      (`install_nvidia_vulkan.sh`), `vulkaninfo` enumerates the **Tesla T4 as a
+      discrete GPU** and all three legs run on the hardware: protocol→render→readback
+      (pixel exact, `software_renderer=false`), a 3600-frame 1280×720 benchmark, and
+      **H.264 via `h264_nvenc` on the T4 NVENC**. (Earlier note that Colab "can't do
+      Vulkan" was WRONG — it was a missing NVIDIA graphics userspace, not a hard
+      limit.) See `rgpu/renderd/linux/README.md`.
 
 REMAINING (the multi-month graphics body):
 - [ ] Resource object-graph translation for D3D11 (COM pointer -> stable id + upload
