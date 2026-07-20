@@ -9,3 +9,4 @@ __pycache__/
 renderd/win/*.exe
 controller/__pycache__/
 renderd/__pycache__/
+proxy-d3d11/test/*.dll

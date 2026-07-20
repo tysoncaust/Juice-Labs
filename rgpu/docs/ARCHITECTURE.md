@@ -91,9 +91,31 @@ STOP rendering, not fall back locally.
       the game enumerates only "Remote GPU - NVIDIA T4" (0x10DE, 15360 MB);
       `localHardwareDevicesCreated=0`, `remoteDevicesCreated=1`, WARP refused. This
       is the interception *surface + policy*, NOT yet a command-serializing renderer.
-- [ ] Phase-1 host D3D11 reference renderer (`rgpu/renderd/win`).
-- [ ] Command/resource serialization end-to-end (triangle).
-- [ ] Phases 2–5.
+- [x] Host D3D11 **reference renderer** (`rgpu/renderd/win`) — consumes a protocol
+      batch on a real device (create RT → clear → present → readback); loopback
+      test verifies presented pixels == cleared color. + stdio CLI.
+- [x] **WebSocket transport + ephemeral registration** (`rgpu/controller`, `rgpu/renderd/rgpu_agent.py`)
+      — agent dials out, registers caps, client opens a session; a command batch
+      flows client→controller→agent→native renderer and a real frame returns.
+      **Verified networked frame** (pixels correct).
+- [x] **dxgi proxy DLL** (`proxy-d3d11/src/rgpu_dxgi_proxy.cpp`) — injectable
+      `dxgi.dll` routing `CreateDXGIFactory*` to the synthetic adapter, forwarding
+      the rest to the real dxgi. Verified: a loader gets the synthetic adapter.
+- [x] **Client serialization core** (`proxy-d3d11/src/rgpu_serializer.*`) — a
+      device/context-shaped front-end whose D3D11-subset calls serialize into the
+      protocol. Verified: game-shaped calls → protocol → renderer → correct frame.
+- [x] **Colab ComfyUI proof runner** (`rgpu/colab/comfyui_models_proof.*`) — SDXL
+      headless (verified graph) + Chroma1-HD/Z-Image over a ComfyUI tunnel; runs on
+      the on-demand Colab GPU.
 
-This is the correct foundation and the first compilable proof; the remaining work
-is the multi-month graphics-engineering body (protocol impl + Vulkan renderer).
+REMAINING (the multi-month graphics body):
+- [ ] Full `ID3D11Device`/`ID3D11DeviceContext` COM vtable (~150 methods) wrapping
+      the serializer + a `d3d11.dll` proxy, so a real game's calls land in it.
+- [ ] Protocol coverage for the whole D3D11 surface (Phase-4 API tests) + resource
+      upload path.
+- [ ] `rgpu-renderd-linux` (Vulkan) implementing the protocol on Colab + H.264
+      frame encode + return to a virtual display (Phase-3 remote triangle → games).
+
+The data-plane loop is proven end-to-end for a minimal frame (client D3D11 calls →
+serialize → transport → remote renderer → verified frame back). Running a real game
+needs the full COM surface + the Vulkan backend + encode — the remaining body.
