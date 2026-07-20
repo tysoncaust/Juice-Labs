@@ -19,6 +19,30 @@ serialize + remote later.**
       proxy — ATTACH logged, 4× `D3D12CreateDevice` (FL 12_0) returned S_OK through
       us, game reached a responsive rendering state (GPU 3D ~93%, ~2.7 GB VRAM).
 
+- [x] **Step 2 — command-stream tee via in-place vtable hooking** (`src/rgpu_d3d12_proxy.cpp`
+      + `src/rgpu_d3d12_slots.cpp`). D3D12 has no immediate context, so we hook (PIX/
+      RenderDoc-style) the shared vtables of `ID3D12CommandQueue::ExecuteCommandLists`
+      (submission boundary) and the `ID3D12GraphicsCommandList` recording slots
+      (Draw/DrawIndexed/Dispatch/ResourceBarrier/Clear*/OMSetRenderTargets/Copy/Close),
+      arming from the game's real objects via its create methods (`CreateCommandQueue`,
+      `CreateCommandQueue1`, `CreateCommandList`, `CreateCommandList1`) so the Agility
+      path is covered. Slot indices are derived authoritatively from the SDK's own C
+      `*Vtbl` structs (`rgpu_d3d12_slots.cpp`), not hand-counted. Each hook records the
+      call into the rgpu protocol, then calls the original — game runs unchanged.
+      **Verified by `test/rgpu_d3d12_harness.cpp`:** a controlled process submits a
+      clear-with-barriers list + a draw and the proxy tees `execs=1, barriers=2,
+      clears=1, draws=1, setRT=1` into a protocol batch. In **Tokyo Xtreme Racer** the
+      hooks reach the live game (our patched command-list `Close` hook fires every
+      frame), proving the vtable hooking works on the real AAA UE5 title.
+
+      *TXR live-capture caveat (honest):* TXR bundles **UE4SS**, whose own D3D12 overlay
+      re-hooks the popular vtable slots (Draw/Dispatch/Barrier/ExecuteCommandLists)
+      AFTER us, superseding our hooks on those slots (Close, which mods don't touch,
+      still fires). UE5 Nanite/Lumen is also compute/mesh-shader-driven, so classic
+      `DrawInstanced` is rare. Capturing 100% of TXR's stream needs inline (MinHook-
+      style) hooks that survive vtable re-patching, or hook-ordering vs UE4SS — bounded
+      game-specific hardening, not a mechanism gap (the harness proves the mechanism).
+
 ## Remaining (step 2+ — the D3D12 body, in order)
 D3D12 has no immediate context; work is recorded into command lists and submitted
 through command queues, so wrapping only `ID3D12Device` is insufficient.

@@ -61,10 +61,12 @@ typedef enum {
     RGPU_CMD_COPY_RESOURCE            = 141,
     RGPU_CMD_CLEAR_RTV                = 142,
     RGPU_CMD_CLEAR_DSV                = 143,
+    RGPU_CMD_RESOURCE_BARRIER         = 144, /* D3D12 barriers (state transitions) */
     RGPU_CMD_DRAW                     = 160,
     RGPU_CMD_DRAW_INDEXED             = 161,
     RGPU_CMD_DISPATCH                 = 162, /* compute */
-    RGPU_CMD_PRESENT                  = 180  /* swapchain present -> encode+return frame */
+    RGPU_CMD_PRESENT                  = 180, /* swapchain present -> encode+return frame */
+    RGPU_CMD_EXECUTE_COMMAND_LISTS    = 182  /* D3D12 submission boundary (queue) */
 } rgpu_cmd_op;
 
 /* Each command in a batch is a length-prefixed record: */
