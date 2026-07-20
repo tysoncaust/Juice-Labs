@@ -11,19 +11,16 @@
 #ifndef RGPU_D3D11_DEVICE_H
 #define RGPU_D3D11_DEVICE_H
 #include <d3d11.h>
-#include "rgpu_serializer.h"
-
-extern volatile long g_rgpu_dev_wrapped;        // real devices wrapped
-extern volatile long g_rgpu_tee_texture2d;      // RT textures tee'd to protocol
-extern volatile long g_rgpu_tee_rtv;            // RTVs tee'd to protocol
-RgpuDevice &rgpu_tee();                          // the serializer capturing the tee
+#include "rgpu_tee.h"
+#include "rgpu_d3d11_context.h"
 
 class RgpuD3D11Device : public ID3D11Device {
     ID3D11Device *real_;
+    RgpuD3D11Context *wrapped_ctx_ = nullptr;   // cached wrapped immediate context (COM identity)
     long ref_ = 1;
 public:
     explicit RgpuD3D11Device(ID3D11Device *real) : real_(real) { real_->AddRef(); }
-    ~RgpuD3D11Device() { real_->Release(); }
+    ~RgpuD3D11Device() { if (wrapped_ctx_) wrapped_ctx_->Release(); real_->Release(); }
 
     /* IUnknown */
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void **ppv) override {
@@ -82,7 +79,15 @@ public:
     D3D_FEATURE_LEVEL STDMETHODCALLTYPE GetFeatureLevel() override { return real_->GetFeatureLevel(); }
     UINT    STDMETHODCALLTYPE GetCreationFlags() override { return real_->GetCreationFlags(); }
     HRESULT STDMETHODCALLTYPE GetDeviceRemovedReason() override { return real_->GetDeviceRemovedReason(); }
-    void    STDMETHODCALLTYPE GetImmediateContext(ID3D11DeviceContext **o) override { real_->GetImmediateContext(o); }
+    void    STDMETHODCALLTYPE GetImmediateContext(ID3D11DeviceContext **o) override {
+        if (!o) return;
+        if (!wrapped_ctx_) {                                     // wrap once: the immediate context is a singleton
+            ID3D11DeviceContext *rc = nullptr; real_->GetImmediateContext(&rc);
+            wrapped_ctx_ = new RgpuD3D11Context(rc, this); g_rgpu_ctx_wrapped++;
+            rc->Release();                                       // wrapper holds its own ref
+        }
+        *o = wrapped_ctx_; wrapped_ctx_->AddRef();
+    }
     HRESULT STDMETHODCALLTYPE SetExceptionMode(UINT f) override { return real_->SetExceptionMode(f); }
     UINT    STDMETHODCALLTYPE GetExceptionMode() override { return real_->GetExceptionMode(); }
 };

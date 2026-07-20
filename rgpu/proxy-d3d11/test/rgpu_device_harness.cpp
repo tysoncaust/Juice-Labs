@@ -19,6 +19,7 @@
 typedef HRESULT(WINAPI *pCreate)(IDXGIAdapter *, D3D_DRIVER_TYPE, HMODULE, UINT,
     const D3D_FEATURE_LEVEL *, UINT, UINT, ID3D11Device **, D3D_FEATURE_LEVEL *, ID3D11DeviceContext **);
 typedef void(WINAPI *pStats)(long *, long *, long *, unsigned *, unsigned *);
+typedef void(WINAPI *pCtxStats)(long *, long *, long *, long *);
 
 int main() {
     std::printf("rgpu d3d11 proxy harness\n------------------------\n");
@@ -76,10 +77,19 @@ int main() {
     std::printf("  proxy stats: devicesWrapped=%ld  tee{tex2d=%ld rtv=%ld cmds=%u batch=%u bytes}\n",
                 devWrapped, teeTex, teeRtv, teeCmds, teeBytes);
 
-    int ok = pixel_ok && devWrapped == 1 && teeTex >= 1 && teeRtv >= 1 && teeCmds >= 2 && teeBytes > 0;
+    /* the ctx returned by CreateDevice is now the WRAPPED immediate context, so the
+     * ClearRenderTargetView above went through the 115-method context vtable + tee'd. */
+    long ctxWrapped=0, teeDraws=0, teeClears=0, teeState=0;
+    pCtxStats CtxStats = (pCtxStats)GetProcAddress(dll, "rgpu_proxy_ctx_stats");
+    if (CtxStats) CtxStats(&ctxWrapped, &teeDraws, &teeClears, &teeState);
+    std::printf("  context stats: contextsWrapped=%ld  tee{draws=%ld clears=%ld state=%ld}\n",
+                ctxWrapped, teeDraws, teeClears, teeState);
+
+    int ok = pixel_ok && devWrapped == 1 && teeTex >= 1 && teeRtv >= 1 && teeCmds >= 2 && teeBytes > 0
+             && ctxWrapped >= 1 && teeClears >= 1;
     staging->Release(); rtv->Release(); rt->Release(); ctx->Release(); dev->Release();
     std::printf("------------------------\n");
-    std::printf(ok ? "RESULT: game-shaped D3D11 device ran through the wrapper on the real GPU + tee'd to protocol\n"
+    std::printf(ok ? "RESULT: game-shaped D3D11 device + immediate context ran through the full wrappers on the real GPU + tee'd to protocol\n"
                    : "RESULT: FAIL\n");
     return ok ? 0 : 1;
 }

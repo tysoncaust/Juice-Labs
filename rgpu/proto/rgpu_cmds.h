@@ -12,6 +12,15 @@
 typedef struct { uint32_t width, height, format; } rgpu_args_create_texture2d; /* handle in record */
 typedef struct { float rgba[4]; } rgpu_args_clear_rtv;                          /* handle = target */
 typedef struct { uint32_t _reserved; } rgpu_args_present;                       /* handle = frame src */
+/* Per-frame context commands (tee'd by the ID3D11DeviceContext wrapper). Bound
+ * resources are referenced by object id (handle/fields); full COM-pointer->id
+ * object-graph translation is the resource-tracking layer, same as D3D12. */
+typedef struct { uint32_t vertex_count, start_vertex, instance_count, start_instance; } rgpu_args_draw;
+typedef struct { uint32_t index_count, start_index; int32_t base_vertex;
+                 uint32_t instance_count, start_instance; } rgpu_args_draw_indexed;
+typedef struct { uint32_t x, y, z; } rgpu_args_dispatch;
+typedef struct { uint32_t flags; float depth; uint32_t stencil; } rgpu_args_clear_dsv; /* handle = dsv */
+typedef struct { uint32_t num_rtvs, first_rtv_id, dsv_id; } rgpu_args_set_render_targets;
 #pragma pack(pop)
 
 /* Tiny append-only batch writer over a caller buffer. */

@@ -126,12 +126,22 @@ STOP rendering, not fall back locally.
       No incompatible-driver errors, session kicks, or altered behaviour observed on the
       two D3D11 titles; both are single-player with no kernel anti-cheat.
 
+- [x] **Full `ID3D11DeviceContext` COM vtable (115 entries)** — `rgpu_d3d11_context.h`
+      wraps the real immediate context; every method forwards (game renders locally)
+      and the per-frame Draw/DrawIndexed/DrawInstanced/Dispatch/Clear*/OMSetRenderTargets/
+      CopyResource calls tee into the protocol. Device `GetImmediateContext` + the
+      context returned by `D3D11CreateDevice` both hand back the one wrapped instance
+      (COM identity). Harness verified: real frame + `contextsWrapped=1`,
+      `tee{clears,state}` recorded. Bound resources are tee'd by a pointer-derived
+      object id; full COM-pointer->id object-graph translation is the resource layer below.
+
 REMAINING (the multi-month graphics body):
-- [ ] Full `ID3D11DeviceContext` COM vtable (~110 methods) wrapping the serializer, so
-      per-frame draw/state/map calls (not just device creation) land in the protocol.
-- [ ] Protocol coverage for the whole D3D11 surface (Phase-4 API tests) + resource
-      upload path.
-- [ ] (For D3D12 titles like TXR) a parallel `ID3D12Device`/`dxgi` proxy surface.
+- [ ] Resource object-graph translation for D3D11 (COM pointer -> stable id + upload
+      path) so a REMOTE renderer can resolve the tee'd draws/state, not just count them.
+- [ ] `rgpu-d3d12` frontend for D3D12/SM6 titles (TXR): transparent pass-through proxy
+      (device + command queue/list + DXGI swap chain) first, then serialize. See below.
+- [ ] Remote backend, in the user's sequence: D3D12 tee -> local replay -> remote
+      **Windows D3D12** -> Linux **Vulkan + H.264** LAST (needs a Colab Linux GPU to verify).
 - [ ] `rgpu-renderd-linux` (Vulkan) implementing the protocol on Colab + H.264
       frame encode + return to a virtual display (Phase-3 remote triangle → games).
 
