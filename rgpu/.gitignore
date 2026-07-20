@@ -10,3 +10,9 @@ renderd/win/*.exe
 controller/__pycache__/
 renderd/__pycache__/
 proxy-d3d11/test/*.dll
+
+# rgpu build artifacts
+*.dll
+*.exe
+*.o
+*.obj
