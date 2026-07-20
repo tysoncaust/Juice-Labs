@@ -107,12 +107,31 @@ STOP rendering, not fall back locally.
 - [x] **Colab ComfyUI proof runner** (`rgpu/colab/comfyui_models_proof.*`) — SDXL
       headless (verified graph) + Chroma1-HD/Z-Image over a ComfyUI tunnel; runs on
       the on-demand Colab GPU.
+- [x] **Full `ID3D11Device` COM vtable (40 methods) + `d3d11.dll` proxy** — pass-through
+      +tee (`proxy-d3d11/src/rgpu_d3d11_device.h`, `rgpu_d3d11_proxy.cpp`). The proxy's
+      exported `D3D11CreateDevice`/`...AndSwapChain` build a real device and hand the game
+      an `RgpuD3D11Device` wrapper; covered creates tee into the protocol. Harness
+      (`test/rgpu_device_harness.cpp`) verified on the RTX: device via the proxy export,
+      real frame rendered through the wrapper (pixel exact), tee'd to a protocol batch.
+- [x] **Real-game boot tests (Phase-5 device gate, local reference renderer)** — proxy
+      `d3d11.dll` dropped beside each game; `%TEMP%\rgpu_proxy.log` records attach+wrap:
+      * **Subnautica** (Unity/D3D11): booted to the "Subnautica" menu window, 2 devices
+        wrapped, **GPU 3D-engine 100%, 1314 MB VRAM** — runs through our layer, GPU not refused.
+      * **TCG Card Shop Simulator** (Unity/D3D11): booted to its window, 2 devices wrapped,
+        **GPU 3D-engine 96%, 644 MB VRAM** — runs through our layer, GPU not refused.
+      * **Tokyo Xtreme Racer** (UE5): forced `-d3d11` → proxy created **7 devices, no refusal**,
+        but the game exits in renderer init because it is a **D3D12/SM6 title** (ships
+        `D3D12`+`DML` RHIs; Nanite/Lumen can't run on D3D11). Default D3D12 launch boots
+        fine (control). Intercepting it needs an `ID3D12Device` proxy, not a D3D11 one.
+      No incompatible-driver errors, session kicks, or altered behaviour observed on the
+      two D3D11 titles; both are single-player with no kernel anti-cheat.
 
 REMAINING (the multi-month graphics body):
-- [ ] Full `ID3D11Device`/`ID3D11DeviceContext` COM vtable (~150 methods) wrapping
-      the serializer + a `d3d11.dll` proxy, so a real game's calls land in it.
+- [ ] Full `ID3D11DeviceContext` COM vtable (~110 methods) wrapping the serializer, so
+      per-frame draw/state/map calls (not just device creation) land in the protocol.
 - [ ] Protocol coverage for the whole D3D11 surface (Phase-4 API tests) + resource
       upload path.
+- [ ] (For D3D12 titles like TXR) a parallel `ID3D12Device`/`dxgi` proxy surface.
 - [ ] `rgpu-renderd-linux` (Vulkan) implementing the protocol on Colab + H.264
       frame encode + return to a virtual display (Phase-3 remote triangle → games).
 
