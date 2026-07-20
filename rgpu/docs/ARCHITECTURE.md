@@ -135,11 +135,19 @@ STOP rendering, not fall back locally.
       `tee{clears,state}` recorded. Bound resources are tee'd by a pointer-derived
       object id; full COM-pointer->id object-graph translation is the resource layer below.
 
+- [x] **`rgpu-d3d12` frontend — step 1, transparent pass-through** (`rgpu/proxy-d3d12/`).
+      A `d3d12.dll` proxy forwards the loader surface to `System32\d3d12.dll` (Agility
+      SDK preserved) and logs device creation. **Verified: Tokyo Xtreme Racer boots
+      unchanged on native D3D12 through it** — ATTACH + 4× `D3D12CreateDevice` (FL 12_0)
+      S_OK, responsive rendering (GPU 3D ~93%, ~2.7 GB VRAM). Stops forcing `-d3d11`.
+
 REMAINING (the multi-month graphics body):
 - [ ] Resource object-graph translation for D3D11 (COM pointer -> stable id + upload
       path) so a REMOTE renderer can resolve the tee'd draws/state, not just count them.
-- [ ] `rgpu-d3d12` frontend for D3D12/SM6 titles (TXR): transparent pass-through proxy
-      (device + command queue/list + DXGI swap chain) first, then serialize. See below.
+- [ ] `rgpu-d3d12` step 2+: wrap the execution objects (device/queue/command-list/
+      resource/heap/fence/PSO/root-sig + DXGI swap chain, identity-preserving), translate
+      D3D12 handles, serialize at `ExecuteCommandLists`, DRED diagnostics. See
+      `rgpu/proxy-d3d12/README.md`.
 - [ ] Remote backend, in the user's sequence: D3D12 tee -> local replay -> remote
       **Windows D3D12** -> Linux **Vulkan + H.264** LAST (needs a Colab Linux GPU to verify).
 - [ ] `rgpu-renderd-linux` (Vulkan) implementing the protocol on Colab + H.264
