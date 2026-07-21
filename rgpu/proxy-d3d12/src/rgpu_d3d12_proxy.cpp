@@ -25,6 +25,7 @@
 #include <psapi.h>
 #include <d3d12.h>
 #include <dxgi.h>
+#include <dxgi1_2.h>
 #include <cstdio>
 #include <cstdarg>
 #include <cstring>
@@ -65,10 +66,15 @@ static void tee(uint32_t op, uint32_t handle, const void *a, uint32_t n) {
 static inline uint32_t oid(const void *p) { return (uint32_t)(uintptr_t)p; }
 
 /* Full COM wrapper object-graph (device/queue/list). Included here so its methods
- * can use the tee (tee/oid/counters/rgpu_log) defined above. This is the deterministic
- * interceptor the game cannot route around; the vtable/inline hooks below remain for
- * the external-arm export + diagnostics. */
+ * can use the tee (tee/oid/counters/rgpu_log) defined above. Retained as the protocol-
+ * serialization reference + harness acceptance; the LIVE injection path uses shadow-
+ * vtable in-place patching (below), which preserves the runtime's concrete object. */
 #include "rgpu_d3d12_wrappers.h"
+
+/* In-place interceptors (defined with the shadow-vtable machinery below). */
+static void shadow_patch_device(void *devPtr);
+static void shadow_patch_queue(void *q);
+static void shadow_patch_list(void *l);
 
 /* ---------------- vtable hooking ------------------------------------------ */
 /* ABI-stable vtable slot indices (D3D12 interface layout is frozen). Derived by
@@ -219,6 +225,10 @@ static void STDMETHODCALLTYPE h_ExecuteCommandLists(ID3D12CommandQueue *This, UI
     LONG e = InterlockedIncrement(&g_exec);
     InterlockedExchangeAdd(&g_lists, (LONG)n);
     uint32_t nn = n; tee(RGPU_CMD_EXECUTE_COMMAND_LISTS, 0, &nn, sizeof(nn));
+    /* Shadow-patch every submitted list in place: they are real objects reachable only
+     * here when the queue came from DXGI (we never saw their creation). Their NEXT Reset
+     * re-applies the shadow, so recording from the following frame onward is captured. */
+    for (UINT i = 0; i < n; i++) if (pp && pp[i]) shadow_patch_list(pp[i]);
     o_ExecuteCommandLists(This, n, pp);
     if (e == 1 || (e % 600) == 0) {
         EnterCriticalSection(&g_cs); uint32_t bytes = g_bw.len; LeaveCriticalSection(&g_cs);
@@ -426,10 +436,7 @@ static HRESULT STDMETHODCALLTYPE h_FactoryCreateDevice(ID3D12DeviceFactory *This
     bool warp = adapter_is_warp(adapter);
     rgpu_log("ID3D12DeviceFactory::CreateDevice fl=0x%X adapter=%s -> hr=0x%08lX device=%p",
              (unsigned)fl, warp ? "WARP" : "hardware", (unsigned long)hr, pp ? *pp : nullptr);
-    if (SUCCEEDED(hr) && pp && *pp && !warp) {
-        void *raw = *pp; *pp = rgpu_wrap_device(raw, riid);
-        rgpu_log("  -> returned RgpuD3D12Device wrapper %p over real %p (DeviceFactory path)", *pp, raw);
-    }
+    if (SUCCEEDED(hr) && pp && *pp && !warp) shadow_patch_device(*pp);   /* in place */
     return hr;
 }
 
@@ -513,18 +520,24 @@ static void rgpu_after_get_interface(REFCLSID rclsid, void **ppv) {
 typedef HRESULT (WINAPI *fnGetInterfaceExport)(REFCLSID, REFIID, void **);
 static fnGetInterfaceExport o_CoreGetInterface = nullptr;
 
-/* --- private-bootstrap-interface slot identification -----------------------
- * TXR's real device is created by a method on D3D12Core's PRIVATE bootstrap object
- * (CLSID {AFEE8EAE-...}, IID {DFAFDD2C-...}) which exposes no public interface. To
- * find its create-device slot we hook every vtable slot with a generic 8-arg
- * forwarder (a safe superset on Win64: the callee reads only the args it needs) that
- * logs its arguments and detects when an out-param is filled with a D3D12 device
- * (vtable inside D3D12Core). The slot that yields a device IS create-device. */
-typedef uint64_t (STDMETHODCALLTYPE *rgpu_fn8)(void *, void *, void *, void *, void *, void *, void *, void *);
+/* --- canonical-vtable in-place interception ---------------------------------
+ * The device TXR renders with is created by D3D12Core's private ID3D12CoreModule
+ * (IID {DFAFDD2C-...}): D3D12GetInterface -> CoreModule -> GetDllExports -> export
+ * table entry 0 == the real CreateDevice (D3D12Core.dll+0x6AE20 for 1.614). We must
+ * NOT substitute the device pointer (concrete D3D12Core/d3d12.dll code reads non-COM
+ * fields at fixed offsets - a foreign wrapper crashes it). We tried a per-object SHADOW
+ * vtable (copy + swap the object's vtable pointer), but this D3D12Core RESTORES an
+ * object's vtable pointer to its canonical vtable (proven: a command list's Draw hook
+ * only fired after we re-applied the shadow on Reset). So instead we patch the CANONICAL
+ * vtable IN PLACE (patch_slot): the runtime's restoration points objects back AT that
+ * canonical vtable, so our hooks survive it; the object's vtable pointer is unchanged so
+ * identity + concrete layout are preserved; and one patch covers every object of the
+ * class. Each hook tees then calls the saved original - no wrapper, no unwrap. (This is
+ * the PIX/RenderDoc approach; the user's shadow suggestion predates the restore finding.)
+ * ID3D12CoreModule layout per RenderDoc: IUnknown 0-2, LOEnter 3, LOLeave 4, LOTryEnter
+ * 5, Initialize 6, GetSDKVersion 7, GetDllExports 8. */
 static uintptr_t g_core_base = 0, g_core_end = 0;
-/* Safely read a pointer-sized value from p (mingw g++ has no __try/__except), via
- * VirtualQuery so a non-pointer argument (e.g. an integer FL) can't fault us. */
-static bool safe_read_ptr(void *p, void **out) {
+static bool safe_read_ptr(void *p, void **out) {   /* mingw g++ has no __try/__except */
     if (!p || ((uintptr_t)p & 7)) return false;
     MEMORY_BASIC_INFORMATION mbi{};
     if (!VirtualQuery(p, &mbi, sizeof(mbi)) || mbi.State != MEM_COMMIT) return false;
@@ -533,103 +546,251 @@ static bool safe_read_ptr(void *p, void **out) {
     if (!(pr & (PAGE_READONLY | PAGE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY))) return false;
     *out = *(void **)p; return true;
 }
-/* An object created by D3D12Core that lives on the heap (not a static in the module):
- * a candidate freshly-made device. Static core singletons (the private object itself,
- * its vtable) are inside the module range and excluded. */
-static bool is_heap_core_object(void *obj) {
-    uintptr_t o = (uintptr_t)obj;
-    if (!o || (o >= g_core_base && o < g_core_end)) return false;
-    void *vt; if (!safe_read_ptr(obj, &vt)) return false;
-    uintptr_t v = (uintptr_t)vt; return v >= g_core_base && v < g_core_end;
+static bool is_code_ptr(void *p) {   /* points into an executable module page */
+    if (!p) return false;
+    MEMORY_BASIC_INFORMATION mbi{};
+    if (!VirtualQuery(p, &mbi, sizeof(mbi)) || mbi.State != MEM_COMMIT) return false;
+    return (mbi.Protect & (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY)) != 0;
 }
-/* THE device-creation method (slot 7 of the private bootstrap interface for this
- * D3D12Core). It writes a new ID3D12Device to an out-parameter; we wrap that device in
- * place so the runtime (and the game) receive OUR RgpuD3D12Device - the interception
- * point that the public D3D12CreateDevice / factory routes never reach for TXR. */
-static void *o_priv_create = nullptr;
-static volatile LONG g_priv_wrapped = 0;
-/* Wrapping the device HERE (the D3D12Core-internal factory boundary) destabilises the
- * game: this device object is consumed by concrete D3D12Core/d3d12.dll code that reads
- * non-COM internal fields at fixed offsets, which a COM wrapper does not provide. So
- * this hook is OBSERVE-ONLY by default - it records the caller + the produced device so
- * a later pass can wrap at the PUBLIC boundary (where UE5 receives a pure-COM device).
- * Flip g_priv_wrap_enabled only for experiments. */
-static volatile LONG g_priv_wrap_enabled = 0;
-static uint64_t STDMETHODCALLTYPE h_priv_create(void *This, void *a1, void *a2, void *a3, void *a4, void *a5, void *a6, void *a7) {
-    void *caller = __builtin_return_address(0);
-    uint64_t r = ((rgpu_fn8)o_priv_create)(This, a1, a2, a3, a4, a5, a6, a7);
-    void *args[6] = {a1, a2, a3, a4, a5, a6};
-    for (int k = 0; k < 6; k++) {
-        void *obj;
-        if (!safe_read_ptr(args[k], &obj) || !is_heap_core_object(obj)) continue;
-        IUnknown *u = (IUnknown *)obj;
-        void *already = nullptr;
-        if (SUCCEEDED(u->QueryInterface(IID_RgpuUnwrap, &already))) break;   /* already our wrapper */
-        ID3D12Device *dev = nullptr;
-        if (SUCCEEDED(u->QueryInterface(__uuidof(ID3D12Device), (void **)&dev)) && dev) {
-            dev->Release();
-            HMODULE cm = nullptr;
-            GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                               (LPCSTR)caller, &cm);
-            char cn[MAX_PATH] = "?"; if (cm) GetModuleBaseNameA(GetCurrentProcess(), cm, cn, sizeof(cn));
-            LONG w = InterlockedIncrement(&g_priv_wrapped);
-            rgpu_log("private create-slot produced device #%ld real=%p (out-arg %d) caller=%p[%s] wrap_enabled=%ld",
-                     w, obj, k, caller, cn, g_priv_wrap_enabled);
-            if (g_priv_wrap_enabled)
-                *(void **)args[k] = rgpu_wrap_device(obj, __uuidof(ID3D12Device));
-            break;
-        }
+static volatile LONG g_sh_devices = 0, g_sh_queues = 0, g_sh_lists = 0;
+/* patch a canonical-vtable slot once (guarded by *orig staying null until patched). */
+static bool patch_canonical(void *obj, unsigned slot, void *detour, void **orig) {
+    if (*orig) return true;                       /* this vtable already patched */
+    return patch_slot(obj, slot, detour, orig);   /* patch_slot saves *orig then writes */
+}
+
+/* Queue: intercept ExecuteCommandLists (the submission boundary). */
+static void shadow_patch_queue(void *q) {
+    if (!q || o_ExecuteCommandLists) return;
+    if (patch_canonical(q, RGPU_SLOT_Queue_ExecuteCommandLists, (void *)h_ExecuteCommandLists, (void **)&o_ExecuteCommandLists))
+        if (InterlockedIncrement(&g_sh_queues) == 1) rgpu_log("patched canonical QUEUE vtable ExecuteCommandLists (survives vtable restore)");
+}
+/* Command list: intercept the recording slots + Close. Draw/etc. survive the runtime's
+ * Reset-time vtable restore because the canonical vtable itself is patched. */
+static void shadow_patch_list(void *l) {
+    if (!l || o_DrawInstanced) return;
+    patch_canonical(l, RGPU_SLOT_GCL_DrawInstanced,         (void *)h_DrawInstanced,        (void **)&o_DrawInstanced);
+    patch_canonical(l, RGPU_SLOT_GCL_DrawIndexedInstanced,  (void *)h_DrawIndexedInstanced, (void **)&o_DrawIndexedInstanced);
+    patch_canonical(l, RGPU_SLOT_GCL_Dispatch,              (void *)h_Dispatch,             (void **)&o_Dispatch);
+    patch_canonical(l, RGPU_SLOT_GCL_ResourceBarrier,       (void *)h_ResourceBarrier,      (void **)&o_ResourceBarrier);
+    patch_canonical(l, RGPU_SLOT_GCL_ClearRenderTargetView, (void *)h_ClearRTV,             (void **)&o_ClearRTV);
+    patch_canonical(l, RGPU_SLOT_GCL_OMSetRenderTargets,    (void *)h_OMSetRenderTargets,   (void **)&o_OMSetRenderTargets);
+    patch_canonical(l, RGPU_SLOT_GCL_CopyResource,          (void *)h_CopyResource,         (void **)&o_CopyResource);
+    patch_canonical(l, RGPU_SLOT_GCL_ExecuteIndirect,       (void *)h_ExecuteIndirect,      (void **)&o_ExecuteIndirect);
+    patch_canonical(l, RGPU_SLOT_GCL_Close,                 (void *)h_Close,                (void **)&o_Close);
+    /* GCL6/GCL7 slots exist only if the list supports them (UE5 5.x) - QI to confirm. */
+    { ID3D12GraphicsCommandList6 *l6=nullptr; if (SUCCEEDED(((IUnknown*)l)->QueryInterface(__uuidof(ID3D12GraphicsCommandList6),(void**)&l6))&&l6){ patch_canonical(l6, RGPU_SLOT_GCL6_DispatchMesh,(void*)h_DispatchMesh,(void**)&o_DispatchMesh); l6->Release(); } }
+    { ID3D12GraphicsCommandList7 *l7=nullptr; if (SUCCEEDED(((IUnknown*)l)->QueryInterface(__uuidof(ID3D12GraphicsCommandList7),(void**)&l7))&&l7){ patch_canonical(l7, RGPU_SLOT_GCL7_Barrier,(void*)h_Barrier,(void**)&o_Barrier); l7->Release(); } }
+    if (InterlockedIncrement(&g_sh_lists) == 1) rgpu_log("patched canonical LIST vtable recording slots (Draw/Dispatch/Barrier/Clear/Copy/Close)");
+}
+static void shadow_patch_queue_from_any(void *o) { ID3D12CommandQueue *q=nullptr; if (o && SUCCEEDED(((IUnknown*)o)->QueryInterface(__uuidof(ID3D12CommandQueue),(void**)&q))&&q){ shadow_patch_queue(q); q->Release(); } }
+static void shadow_patch_list_from_any(void *o)  { ID3D12GraphicsCommandList *l=nullptr; if (o && SUCCEEDED(((IUnknown*)o)->QueryInterface(__uuidof(ID3D12GraphicsCommandList),(void**)&l))&&l){ shadow_patch_list(l); l->Release(); } }
+
+/* Device create-method detours: create via the original, then patch the returned
+ * queue/list's canonical vtable. */
+static fnDevCCQ o_sh_DevCCQ; static fnDevCCQ1 o_sh_DevCCQ1; static fnDevCCL o_sh_DevCCL; static fnDevCCL1 o_sh_DevCCL1;
+static HRESULT STDMETHODCALLTYPE sh_DevCCQ(ID3D12Device *T, const D3D12_COMMAND_QUEUE_DESC *d, REFIID r, void **pp) { HRESULT hr=o_sh_DevCCQ(T,d,r,pp); if(SUCCEEDED(hr)&&pp&&*pp) shadow_patch_queue_from_any(*pp); return hr; }
+static HRESULT STDMETHODCALLTYPE sh_DevCCQ1(ID3D12Device9 *T, const D3D12_COMMAND_QUEUE_DESC *d, REFIID c, REFIID r, void **pp) { HRESULT hr=o_sh_DevCCQ1(T,d,c,r,pp); if(SUCCEEDED(hr)&&pp&&*pp) shadow_patch_queue_from_any(*pp); return hr; }
+static HRESULT STDMETHODCALLTYPE sh_DevCCL(ID3D12Device *T, UINT nm, D3D12_COMMAND_LIST_TYPE ty, ID3D12CommandAllocator *a, ID3D12PipelineState *ps, REFIID r, void **pp) { HRESULT hr=o_sh_DevCCL(T,nm,ty,a,ps,r,pp); if(SUCCEEDED(hr)&&pp&&*pp) shadow_patch_list_from_any(*pp); return hr; }
+static HRESULT STDMETHODCALLTYPE sh_DevCCL1(ID3D12Device4 *T, UINT nm, D3D12_COMMAND_LIST_TYPE ty, D3D12_COMMAND_LIST_FLAGS f, REFIID r, void **pp) { HRESULT hr=o_sh_DevCCL1(T,nm,ty,f,r,pp); if(SUCCEEDED(hr)&&pp&&*pp) shadow_patch_list_from_any(*pp); return hr; }
+
+/* Device: intercept queue/list creation on the canonical device vtable so we reach the
+ * real game-used queues/lists that carry the per-frame command stream. */
+static void shadow_patch_device(void *devPtr) {
+    if (!devPtr) return;
+    ID3D12Device *dev = nullptr;
+    if (FAILED(((IUnknown *)devPtr)->QueryInterface(__uuidof(ID3D12Device), (void **)&dev)) || !dev) return;
+    if (!o_sh_DevCCQ) {
+        patch_canonical(dev, RGPU_SLOT_Device_CheckFeatureSupport,  (void *)h_CFS,      (void **)&o_CFS); /* diag: proves the patch persists + device is used */
+        patch_canonical(dev, RGPU_SLOT_Device_CreateCommandQueue,   (void *)sh_DevCCQ,  (void **)&o_sh_DevCCQ);
+        patch_canonical(dev, RGPU_SLOT_Device_CreateCommandList,    (void *)sh_DevCCL,  (void **)&o_sh_DevCCL);
+        ID3D12Device4 *d4=nullptr; if (SUCCEEDED(dev->QueryInterface(__uuidof(ID3D12Device4),(void**)&d4))&&d4){ patch_canonical(d4, RGPU_SLOT_Device4_CreateCommandList1,(void*)sh_DevCCL1,(void**)&o_sh_DevCCL1); d4->Release(); }
+        ID3D12Device9 *d9=nullptr; if (SUCCEEDED(dev->QueryInterface(__uuidof(ID3D12Device9),(void**)&d9))&&d9){ patch_canonical(d9, RGPU_SLOT_Device9_CreateCommandQueue1,(void*)sh_DevCCQ1,(void**)&o_sh_DevCCQ1); d9->Release(); }
+        if (InterlockedIncrement(&g_sh_devices) == 1)
+            rgpu_log("patched canonical DEVICE vtable create-queue/list (survives vtable restore; game keeps its object)");
     }
+    dev->Release();
+}
+
+/* --- DXGI swap-chain hooks: identify the game's real render QUEUE -----------
+ * For D3D12, IDXGIFactory*::CreateSwapChain*'s `pDevice` argument IS the command queue
+ * the swap chain presents from - the game's actual render queue. This is the
+ * unambiguous way to find it (vs guessing from feature level / call counts): adopt that
+ * queue (shadow-patch its ExecuteCommandLists) and its device. */
+extern "C" {
+extern unsigned RGPU_SLOT_DXGIFactory_CreateSwapChain,
+    RGPU_SLOT_DXGIFactory2_CreateSwapChainForHwnd, RGPU_SLOT_DXGIFactory2_CreateSwapChainForComposition;
+}
+static volatile LONG g_render_queue_found = 0;
+static void adopt_render_queue(IUnknown *pDevice) {
+    if (!pDevice) return;
+    ID3D12CommandQueue *q = nullptr;
+    HRESULT hrq = pDevice->QueryInterface(__uuidof(ID3D12CommandQueue), (void **)&q);
+    if (SUCCEEDED(hrq) && q) {
+        if (InterlockedIncrement(&g_render_queue_found) == 1)
+            rgpu_log("DXGI swap chain -> render QUEUE %p adopted (presentation queue); this is TXR's live queue", (void *)q);
+        shadow_patch_queue(q);
+        ID3D12Device *dev = nullptr;
+        if (SUCCEEDED(q->GetDevice(__uuidof(ID3D12Device), (void **)&dev)) && dev) { shadow_patch_device(dev); dev->Release(); }
+        q->Release();
+    } else {
+        /* Not a command queue by our IID - probe what it actually is. */
+        void *vt = nullptr; safe_read_ptr(pDevice, &vt);
+        void *caller = __builtin_return_address(0);
+        auto modname = [](void *addr, char *buf) { HMODULE m=nullptr; buf[0]='?'; buf[1]=0;
+            if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,(LPCSTR)addr,&m)&&m) GetModuleBaseNameA(GetCurrentProcess(),m,buf,MAX_PATH); };
+        char vm[MAX_PATH], cm[MAX_PATH]; modname(vt, vm); modname(caller, cm);
+        /* Is it an ID3D11Device (D3D11On12) or does it QI to a queue via a device? */
+        void *t = nullptr;
+        GUID IID_ID3D11Device = {0xdb6f6ddb,0xac77,0x4e88,{0x82,0x53,0x81,0x9d,0xf9,0xbb,0xf1,0x40}};
+        bool is11 = SUCCEEDED(pDevice->QueryInterface(IID_ID3D11Device, &t)) && t; if (t) ((IUnknown*)t)->Release();
+        rgpu_log("DXGI pDevice=%p vtbl=%p[%s] caller=%p[%s] QI(Queue)=0x%08lX isID3D11Device=%d - NOT a D3D12 queue",
+                 (void *)pDevice, vt, vm, caller, cm, (unsigned long)hrq, is11);
+    }
+}
+typedef HRESULT (STDMETHODCALLTYPE *fnCreateSwapChain)(IUnknown *, IUnknown *, DXGI_SWAP_CHAIN_DESC *, IDXGISwapChain **);
+typedef HRESULT (STDMETHODCALLTYPE *fnCSCForHwnd)(IUnknown *, IUnknown *, HWND, const DXGI_SWAP_CHAIN_DESC1 *, const DXGI_SWAP_CHAIN_FULLSCREEN_DESC *, IDXGIOutput *, IDXGISwapChain1 **);
+typedef HRESULT (STDMETHODCALLTYPE *fnCSCForComp)(IUnknown *, IUnknown *, const DXGI_SWAP_CHAIN_DESC1 *, IDXGIOutput *, IDXGISwapChain1 **);
+static fnCreateSwapChain o_CreateSwapChain; static fnCSCForHwnd o_CSCForHwnd; static fnCSCForComp o_CSCForComp;
+static HRESULT STDMETHODCALLTYPE h_CreateSwapChain(IUnknown *T, IUnknown *dev, DXGI_SWAP_CHAIN_DESC *d, IDXGISwapChain **pp) { rgpu_log("DXGI CreateSwapChain pDevice=%p", (void*)dev); adopt_render_queue(dev); return o_CreateSwapChain(T, dev, d, pp); }
+static HRESULT STDMETHODCALLTYPE h_CSCForHwnd(IUnknown *T, IUnknown *dev, HWND h, const DXGI_SWAP_CHAIN_DESC1 *d, const DXGI_SWAP_CHAIN_FULLSCREEN_DESC *fd, IDXGIOutput *o, IDXGISwapChain1 **pp) { rgpu_log("DXGI CreateSwapChainForHwnd pDevice=%p hwnd=%p", (void*)dev, (void*)h); adopt_render_queue(dev); return o_CSCForHwnd(T, dev, h, d, fd, o, pp); }
+static HRESULT STDMETHODCALLTYPE h_CSCForComp(IUnknown *T, IUnknown *dev, const DXGI_SWAP_CHAIN_DESC1 *d, IDXGIOutput *o, IDXGISwapChain1 **pp) { rgpu_log("DXGI CreateSwapChainForComposition pDevice=%p", (void*)dev); adopt_render_queue(dev); return o_CSCForComp(T, dev, d, o, pp); }
+static void *g_hooked_dxgi_factory_vtbl = nullptr;
+static void hook_dxgi_factory(void *factory) {
+    if (!factory) return;
+    void *vtbl = *(void **)factory; if (vtbl == g_hooked_dxgi_factory_vtbl) return;
+    bool a = patch_slot(factory, RGPU_SLOT_DXGIFactory_CreateSwapChain, (void *)h_CreateSwapChain, (void **)&o_CreateSwapChain);
+    bool b = false, c = false;
+    IDXGIFactory2 *f2 = nullptr;
+    if (SUCCEEDED(((IUnknown *)factory)->QueryInterface(__uuidof(IDXGIFactory2), (void **)&f2)) && f2) {
+        b = patch_slot(f2, RGPU_SLOT_DXGIFactory2_CreateSwapChainForHwnd, (void *)h_CSCForHwnd, (void **)&o_CSCForHwnd);
+        c = patch_slot(f2, RGPU_SLOT_DXGIFactory2_CreateSwapChainForComposition, (void *)h_CSCForComp, (void **)&o_CSCForComp);
+        f2->Release();
+    }
+    g_hooked_dxgi_factory_vtbl = vtbl;
+    rgpu_log("hooked DXGI factory %p vtbl=%p slots CreateSwapChain(%u)=%d ForHwnd(%u)=%d ForComp(%u)=%d",
+             factory, vtbl, RGPU_SLOT_DXGIFactory_CreateSwapChain, a,
+             RGPU_SLOT_DXGIFactory2_CreateSwapChainForHwnd, b, RGPU_SLOT_DXGIFactory2_CreateSwapChainForComposition, c);
+}
+typedef HRESULT (WINAPI *fnCreateDXGIFactory)(REFIID, void **);
+typedef HRESULT (WINAPI *fnCreateDXGIFactory2)(UINT, REFIID, void **);
+static fnCreateDXGIFactory o_CreateDXGIFactory, o_CreateDXGIFactory1; static fnCreateDXGIFactory2 o_CreateDXGIFactory2;
+static HRESULT WINAPI h_CreateDXGIFactory(REFIID riid, void **pp) { HRESULT hr = o_CreateDXGIFactory(riid, pp); if (SUCCEEDED(hr) && pp && *pp) hook_dxgi_factory(*pp); return hr; }
+static HRESULT WINAPI h_CreateDXGIFactory1(REFIID riid, void **pp) { HRESULT hr = o_CreateDXGIFactory1(riid, pp); if (SUCCEEDED(hr) && pp && *pp) hook_dxgi_factory(*pp); return hr; }
+static HRESULT WINAPI h_CreateDXGIFactory2(UINT flags, REFIID riid, void **pp) { HRESULT hr = o_CreateDXGIFactory2(flags, riid, pp); if (SUCCEEDED(hr) && pp && *pp) hook_dxgi_factory(*pp); return hr; }
+/* D3D11On12CreateDevice: TXR presents via a D3D11On12 swap chain (pDevice is an
+ * ID3D11Device), so the real D3D12 render queue is passed here in ppCommandQueues. */
+typedef HRESULT (WINAPI *fnD3D11On12CreateDevice)(IUnknown *, UINT, const D3D_FEATURE_LEVEL *, UINT,
+                                                  IUnknown *const *, UINT, UINT, void **, void **, D3D_FEATURE_LEVEL *);
+static fnD3D11On12CreateDevice o_D3D11On12CreateDevice = nullptr;
+static HRESULT WINAPI h_D3D11On12CreateDevice(IUnknown *dev, UINT flags, const D3D_FEATURE_LEVEL *fl, UINT nfl,
+                                              IUnknown *const *ppQ, UINT nQ, UINT node, void **ppDev, void **ppCtx, D3D_FEATURE_LEVEL *pcfl) {
+    rgpu_log("D3D11On12CreateDevice: d3d12device=%p numQueues=%u (adopting its backing D3D12 render queue)", (void *)dev, nQ);
+    if (dev) shadow_patch_device(dev);
+    for (UINT i = 0; i < nQ && ppQ; i++) if (ppQ[i]) shadow_patch_queue_from_any(ppQ[i]);
+    return o_D3D11On12CreateDevice(dev, flags, fl, nfl, ppQ, nQ, node, ppDev, ppCtx, pcfl);
+}
+static volatile LONG g_d3d11on12_hooked = 0;
+static void install_d3d11on12_hook() {
+    if (o_D3D11On12CreateDevice) return;
+    HMODULE d11 = GetModuleHandleA("d3d11.dll"); if (!d11) return;
+    void *fn = (void *)GetProcAddress(d11, "D3D11On12CreateDevice"); if (!fn) return;
+    if (InterlockedCompareExchange(&g_d3d11on12_hooked, 1, 0) != 0) return;
+    arm_inline_once(fn, (void *)h_D3D11On12CreateDevice, (void **)&o_D3D11On12CreateDevice, "d3d11!D3D11On12CreateDevice");
+    rgpu_log("D3D11On12CreateDevice hook %s @ %p", o_D3D11On12CreateDevice ? "installed" : "FAILED", fn);
+}
+static volatile LONG g_dxgi_hooked = 0;
+static void install_dxgi_hooks() {
+    install_d3d11on12_hook();   /* the D3D11On12 present path carries the render queue */
+    if (g_dxgi_hooked) return;
+    HMODULE dxgi = GetModuleHandleA("dxgi.dll"); if (!dxgi) return;
+    if (InterlockedCompareExchange(&g_dxgi_hooked, 1, 0) != 0) return;
+    void *f0 = (void *)GetProcAddress(dxgi, "CreateDXGIFactory");
+    void *f1 = (void *)GetProcAddress(dxgi, "CreateDXGIFactory1");
+    void *f2 = (void *)GetProcAddress(dxgi, "CreateDXGIFactory2");
+    if (f0) arm_inline_once(f0, (void *)h_CreateDXGIFactory,  (void **)&o_CreateDXGIFactory,  "dxgi!CreateDXGIFactory");
+    if (f1) arm_inline_once(f1, (void *)h_CreateDXGIFactory1, (void **)&o_CreateDXGIFactory1, "dxgi!CreateDXGIFactory1");
+    if (f2) arm_inline_once(f2, (void *)h_CreateDXGIFactory2, (void **)&o_CreateDXGIFactory2, "dxgi!CreateDXGIFactory2");
+    rgpu_log("DXGI export hooks installed (CreateDXGIFactory/1/2) -> render-queue acquisition armed");
+}
+
+/* --- ID3D12CoreModule export-table CreateDevice interception --------------- */
+typedef HRESULT (WINAPI *fnCoreDispatchCreateDevice)(IUnknown *, D3D_FEATURE_LEVEL, unsigned char, const void *, uintptr_t, REFIID, void **);
+static fnCoreDispatchCreateDevice o_CoreTableCreateDevice = nullptr;
+static volatile LONG g_core_table_devices = 0;
+static HRESULT WINAPI h_CoreTableCreateDevice(IUnknown *adapter, D3D_FEATURE_LEVEL fl, unsigned char createFlag,
+                                              const void *ctx, uintptr_t mode, REFIID riid, void **ppDevice) {
+    HRESULT hr = o_CoreTableCreateDevice(adapter, fl, createFlag, ctx, mode, riid, ppDevice);
+    if (SUCCEEDED(hr) && ppDevice && *ppDevice) {
+        LONG d = InterlockedIncrement(&g_core_table_devices);
+        rgpu_log("CORE_TABLE[0] CreateDevice #%ld fl=0x%X -> device=%p vtbl=%p (patching in place)",
+                 d, (unsigned)fl, *ppDevice, *(void **)*ppDevice);
+        shadow_patch_device(*ppDevice);   /* in place - return the UNCHANGED pointer */
+    }
+    return hr;
+}
+/* GetDllExports returns the export table; entry 0 is the real CreateDevice. Hook it. */
+static void hook_core_export_table(void *table) {
+    if (!table || o_CoreTableCreateDevice) return;
+    uint64_t *q = (uint64_t *)table;
+    void *entry0; if (!safe_read_ptr(&q[0], &entry0) || !is_code_ptr(entry0)) return;
+    DWORD oldp = 0;
+    if (VirtualProtect(&q[0], sizeof(void *), PAGE_READWRITE, &oldp)) {
+        o_CoreTableCreateDevice = (fnCoreDispatchCreateDevice)entry0;
+        q[0] = (uint64_t)(uintptr_t)h_CoreTableCreateDevice;
+        DWORD ign = 0; VirtualProtect(&q[0], sizeof(void *), oldp, &ign);
+        FlushInstructionCache(GetCurrentProcess(), &q[0], sizeof(void *));
+        rgpu_log("CORE_EXPORT_TABLE[00] CreateDevice hooked: original=%p detour=%p", entry0, (void *)h_CoreTableCreateDevice);
+    }
+}
+typedef uintptr_t (STDMETHODCALLTYPE *fnCoreVersionedExports)(IUnknown *, void *);
+static fnCoreVersionedExports o_CoreVersioned11 = nullptr;
+static uintptr_t STDMETHODCALLTYPE h_CoreVersioned11(IUnknown *self, void *exportsTable) {
+    uintptr_t r = o_CoreVersioned11(self, exportsTable);
+    hook_core_export_table(exportsTable);
     return r;
 }
-static volatile LONG g_priv_probed = 0;
-/* The device-factory method is slot 7 of this D3D12Core (1.614)'s private bootstrap
- * interface, identified empirically (it emits heap ID3D12Device objects, once per
- * D3D12CreateDevice). Hook it so EVERY device it makes - including TXR's real render
- * device, which never appears via the public entry points - becomes our wrapper. */
-static const int RGPU_PRIV_CREATE_SLOT = 7;
-static void install_private_probes(void *obj) {
-    if (!obj || InterlockedCompareExchange(&g_priv_probed, 1, 0) != 0) return;
+typedef HRESULT (STDMETHODCALLTYPE *fnCoreGetDllExports)(IUnknown *, void *);
+static fnCoreGetDllExports o_CoreGetDllExports = nullptr;
+static HRESULT STDMETHODCALLTYPE h_CoreGetDllExports(IUnknown *self, void *table) {
+    HRESULT hr = o_CoreGetDllExports(self, table);
+    if (SUCCEEDED(hr)) hook_core_export_table(table);
+    return hr;
+}
+typedef HRESULT (STDMETHODCALLTYPE *fnCoreQI)(IUnknown *, REFIID, void **);
+static fnCoreQI o_CoreQI = nullptr;
+static HRESULT STDMETHODCALLTYPE h_CoreQI(IUnknown *self, REFIID riid, void **ppv) {
+    HRESULT hr = o_CoreQI(self, riid, ppv);
+    /* The loader QIs a versioned interface {FC454290-...} then calls its slot 11 to get
+     * the export table; hook that slot on the returned interface before it is used. */
+    if (SUCCEEDED(hr) && ppv && *ppv && riid.Data1 == 0xFC454290 && riid.Data2 == 0x1B19 && riid.Data3 == 0x48C4 && !o_CoreVersioned11)
+        patch_slot(*ppv, 11, (void *)h_CoreVersioned11, (void **)&o_CoreVersioned11);
+    return hr;
+}
+static volatile LONG g_coremodule_hooked = 0;
+static void hook_core_module_object(void *obj) {
+    if (!obj || InterlockedCompareExchange(&g_coremodule_hooked, 1, 0) != 0) return;
     HMODULE core = GetModuleHandleA("D3D12Core.dll");
     MODULEINFO mi{}; if (core && GetModuleInformation(GetCurrentProcess(), core, &mi, sizeof(mi))) {
         g_core_base = (uintptr_t)mi.lpBaseOfDll; g_core_end = g_core_base + mi.SizeOfImage;
     }
-    bool ok = patch_slot(obj, RGPU_PRIV_CREATE_SLOT, (void *)h_priv_create, &o_priv_create);
-    rgpu_log("hooked private bootstrap create-device slot[%d] on %p (core %p..%p): %s",
-             RGPU_PRIV_CREATE_SLOT, obj, (void *)g_core_base, (void *)g_core_end, ok ? "OK" : "FAILED");
+    bool qiOk = patch_slot(obj, 0, (void *)h_CoreQI, (void **)&o_CoreQI);            /* QueryInterface */
+    bool exOk = patch_slot(obj, 8, (void *)h_CoreGetDllExports, (void **)&o_CoreGetDllExports); /* GetDllExports */
+    rgpu_log("ID3D12CoreModule hooked object=%p vtbl=%p QI=%d GetDllExports=%d (export-table CreateDevice route)",
+             obj, *(void **)obj, qiOk, exOk);
 }
 static HRESULT WINAPI h_CoreGetInterface(REFCLSID rclsid, REFIID riid, void **ppv) {
     HRESULT hr = o_CoreGetInterface(rclsid, riid, ppv);
-    rgpu_log("D3D12Core!D3D12GetInterface clsid.Data1=%08lX riid={%08lX-%04X-%04X-%02X%02X%02X%02X%02X%02X%02X%02X} -> hr=0x%08lX obj=%p",
-             (unsigned long)rclsid.Data1,
-             (unsigned long)riid.Data1, riid.Data2, riid.Data3,
-             riid.Data4[0], riid.Data4[1], riid.Data4[2], riid.Data4[3],
-             riid.Data4[4], riid.Data4[5], riid.Data4[6], riid.Data4[7],
-             (unsigned long)hr, (SUCCEEDED(hr) && ppv) ? *ppv : nullptr);
     if (SUCCEEDED(hr) && ppv && *ppv) {
-        /* Dump the private bootstrap object's vtable so we can find its device-creation
-         * slot (offsets relative to D3D12Core base for offline disassembly). */
-        void **vt = *(void ***)*ppv;
-        HMODULE core = GetModuleHandleA("D3D12Core.dll");
-        uintptr_t base = (uintptr_t)core;
-        char line[900]; int off = 0;
-        off += std::snprintf(line + off, sizeof(line) - off, "  private-obj vtbl=%p entries(core+off):", (void *)vt);
-        for (int i = 0; i < 24 && off < (int)sizeof(line) - 32; i++) {
-            void *fn = vt[i];
-            uintptr_t rel = (uintptr_t)fn - base;
-            if (fn && rel < 0x400000) off += std::snprintf(line + off, sizeof(line) - off, " [%d]=+%llX", i, (unsigned long long)rel);
-            else                      off += std::snprintf(line + off, sizeof(line) - off, " [%d]=%p", i, fn);
+        /* ID3D12CoreModule IID {DFAFDD2C-355F-4CB3-A8B2-EA7F9260148B}: the device is born
+         * via its GetDllExports -> export table entry 0 CreateDevice (RenderDoc-confirmed
+         * interface). Not SDKConfiguration/DeviceFactory - those are handled below. */
+        if (riid.Data1 == 0xDFAFDD2C && riid.Data2 == 0x355F && riid.Data3 == 0x4CB3) {
+            rgpu_log("D3D12Core!D3D12GetInterface -> ID3D12CoreModule obj=%p", *ppv);
+            hook_core_module_object(*ppv);
         }
-        rgpu_log("%s", line);
-        /* If it exposes no public interface, it is the private bootstrap object - probe
-         * its slots to find the create-device method. */
-        ID3D12DeviceFactory *fac = nullptr; ID3D12SDKConfiguration1 *sdk = nullptr;
-        bool pub = (SUCCEEDED(((IUnknown *)*ppv)->QueryInterface(__uuidof(ID3D12DeviceFactory), (void **)&fac)) && fac) ||
-                   (SUCCEEDED(((IUnknown *)*ppv)->QueryInterface(__uuidof(ID3D12SDKConfiguration1), (void **)&sdk)) && sdk);
-        if (fac) fac->Release(); if (sdk) sdk->Release();
-        if (!pub) install_private_probes(*ppv);
+        rgpu_after_get_interface(rclsid, ppv);
     }
-    if (SUCCEEDED(hr)) rgpu_after_get_interface(rclsid, ppv);
     return hr;
 }
 static volatile LONG g_core_hooked = 0;
@@ -686,10 +847,12 @@ typedef LONG (NTAPI *fnLdrRegisterDllNotification)(ULONG, PRGPU_LDR_NOTIFY, PVOI
 static PVOID g_ldr_cookie = nullptr;
 static VOID CALLBACK rgpu_ldr_notify(ULONG reason, const RGPU_LDR_DLL_NOTIFICATION_DATA *data, PVOID) {
     /* reason 1 = LDR_DLL_NOTIFICATION_REASON_LOADED */
-    if (reason == 1 && data && data->DllBase && !o_CoreGetInterface && uname_is_d3d12core(data->BaseDllName)) {
+    if (reason != 1) return;
+    if (data && data->DllBase && !o_CoreGetInterface && uname_is_d3d12core(data->BaseDllName)) {
         rgpu_log("DLL-notify: D3D12Core LOADED base=%p; hooking D3D12GetInterface before first use", data->DllBase);
         hook_d3d12core_mod((HMODULE)data->DllBase);
     }
+    install_dxgi_hooks();   /* arm render-queue acquisition once dxgi.dll is present */
 }
 static void install_ldrloaddll_hook() {
     if (g_ldr_cookie) return;
@@ -740,6 +903,7 @@ BOOL WINAPI DllMain(HINSTANCE, DWORD reason, LPVOID) {
          * for UE5 titles like TXR - before its first use. The watcher is only a
          * best-effort fallback for the already-loaded case. */
         install_ldrloaddll_hook();
+        install_dxgi_hooks();   /* dxgi.dll is imported early by D3D12 games; hook it now */
         HANDLE w = CreateThread(nullptr, 0, rgpu_core_watcher, nullptr, 0, nullptr);
         if (w) CloseHandle(w);
     }
@@ -760,14 +924,12 @@ __declspec(dllexport) HRESULT WINAPI D3D12CreateDevice(IUnknown *pAdapter, D3D_F
              (unsigned long)riid.Data1, (unsigned)riid.Data2, (unsigned)riid.Data3, (unsigned)fl,
              warp ? "WARP" : "hardware", (unsigned long)hr, ppDevice ? *ppDevice : nullptr,
              (ppDevice && *ppDevice) ? *(void **)*ppDevice : nullptr);
-    /* Wrap every real (non-WARP) device. NOTE: the `fl` argument is D3D12CreateDevice's
-     * MINIMUM feature level (a floor), NOT the device's capability - TXR passes
-     * FL_1_0_CORE (0x1000) as the floor yet the created device is a full 12_x device it
-     * renders with. Gating on fl would wrongly skip the real device. */
-    if (SUCCEEDED(hr) && ppDevice && *ppDevice && !warp) {
-        void *raw = *ppDevice; *ppDevice = rgpu_wrap_device(raw, riid);
-        rgpu_log("  -> returned RgpuD3D12Device wrapper %p over real %p (FL floor 0x%X, game now holds OUR device)", *ppDevice, raw, (unsigned)fl);
-    }
+    /* SHADOW-patch every real (non-WARP) device in place (idempotent - Agility devices
+     * are already patched at the CoreModule CreateDevice boundary; this covers the
+     * classic runtime path). We return the UNCHANGED pointer so internal code keeps the
+     * concrete object. NOTE: `fl` is the MINIMUM feature level (a floor), not the
+     * device's capability, so we never gate on it. */
+    if (SUCCEEDED(hr) && ppDevice && *ppDevice && !warp) shadow_patch_device(*ppDevice);
     return hr;
 }
 __declspec(dllexport) HRESULT WINAPI D3D12GetDebugInterface(REFIID riid, void **ppvDebug) {

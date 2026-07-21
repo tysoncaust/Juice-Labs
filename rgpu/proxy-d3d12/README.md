@@ -57,54 +57,73 @@ serialize + remote later.**
         `ID3D12SDKConfiguration1` / `ID3D12DeviceFactory`, not by hard-coded CLSID) and
         wrap any device the factory route creates.
 
+- [x] **Canonical-vtable in-place interception via the ID3D12CoreModule export table**
+      (`src/rgpu_d3d12_proxy.cpp`). The real device-creation route (RenderDoc-confirmed):
+      `D3D12Core!D3D12GetInterface({DFAFDD2C-...} = ID3D12CoreModule)` → hook the module's
+      `QueryInterface`(slot 0) + `GetDllExports`(slot 8) → on QI for the versioned
+      `{FC454290-...}` interface, hook its slot 11 → it returns the **export table**, whose
+      **entry 0 is the real `CreateDevice`** (`D3D12Core.dll+0x6AE20` for 1.614). We hook
+      entry 0 and, on the device it makes, **patch the CANONICAL vtable in place** (not a
+      wrapper, not a per-object shadow): intercept `CreateCommandQueue`/`1`,
+      `CreateCommandList`/`1` (device), `ExecuteCommandLists` (queue), and the recording
+      slots (list). This D3D12Core **restores an object's vtable pointer to its canonical
+      vtable** (proven: a list's Draw hook only fired after re-applying on `Reset`), so
+      patching the canonical vtable is what survives it — and it preserves the object's
+      identity + concrete layout (the pointer is unchanged). Also acquires the render queue
+      from **DXGI swap-chain creation** (`CreateSwapChainForHwnd`/etc.) and the
+      **D3D11On12** present path. **Verified by the harness:** the device is created via the
+      export-table `CreateDevice`, canonically patched, and the clear/barrier/draw stream is
+      tee'd (`draws=1` with no re-swap, proving the canonical patch beats the restore).
+
 ### TXR live-capture — honest status (NOT achieved) and the exact reason
 
-The wrapper is complete and proven (harness), and the D3D12Core interception fires
-reliably, but **Tokyo Xtreme Racer's per-frame command stream is not yet captured.**
-Root cause, established by live diagnosis:
+The mechanism is proven (harness), TXR is **stable** with it (renders at ~130% GPU, no
+crash — in-place patching preserves the concrete object), and the interception fires:
+`ID3D12CoreModule hooked`, `CORE_EXPORT_TABLE[00] CreateDevice hooked`, `CORE_TABLE[0]
+CreateDevice` ×4, canonical DEVICE vtable patched. But TXR's per-frame stream is still not
+captured. The exact reason, from live diagnosis:
 
-- TXR (UE5 + Agility SDK **1.614**) creates its real device through a **private,
-  undocumented D3D12Core bootstrap interface**: `D3D12Core!D3D12GetInterface(CLSID
-  {AFEE8EAE-417D-4AC1-99A6-BDEE414E4DA2}, IID {DFAFDD2C-355F-4CB3-A8B2-EA7F9260148B})`
-  returns an internal object that exposes **no public D3D12 interface**. Its vtable
-  **slot 7** is the device factory (identified empirically: it emits heap `ID3D12Device`
-  objects, one per `D3D12CreateDevice`).
-- That slot is called **by D3D12Core itself** (`caller = D3D12Core.dll+0x79A5D`), and the
-  devices it produces are consumed by **concrete D3D12Core / d3d12.dll internal code that
-  reads non-COM fields at fixed offsets**. Wrapping the device there **crashes the game**
-  (a COM wrapper doesn't provide the internal layout). Confirmed: observe-only is stable
-  (116% GPU), wrapping-there is not.
-- The devices that *do* reach the public `D3D12CreateDevice` (all four, `fl=0x1000` =
-  `FL_1_0_CORE` **floor**, not a capability) get **0 `QueryInterface` and 0 command-queue
-  creations** on our wrapper (`DEVICE QI HIT=0`, `DEVICE QI LEAK=0`, `wrapped-queue=0`) —
-  proving they are internal capability probes, not UE5's render device. UE5's render
-  device is created and used **entirely within the D3D12Core/d3d12.dll boundary** and
-  never surfaces as a pure-COM `ID3D12Device` through any public entry a proxy can wrap.
+- All 4 D3D12 devices share vtbl `0x…ddefb58`; the canonical patch is applied and **reads
+  back live on every device** (`CFSslot`/`CCQslot` == our detours). Yet the game calls
+  **neither `CheckFeatureSupport` nor `CreateCommandQueue`/`CreateCommandList`** on any of
+  them across 85s of rendering. So the 4 public devices are genuinely unused at the
+  public-COM level.
+- TXR **presents through a D3D11On12 swap chain**: `CreateSwapChainForHwnd`'s `pDevice` is
+  an `ID3D11Device` (vtbl in `d3d11.dll`, `isID3D11Device=1`), created **internally by
+  d3d12.dll** (the public `D3D11On12CreateDevice` export is hooked but never called).
+- Conclusion: TXR's actual command submission runs on a queue created through
+  **D3D12Core-internal / D3D11On12-internal** paths that never invoke the public
+  `ID3D12Device`/`ID3D12CommandQueue` COM methods a vtable hook can reach.
 
-**Note on the `fl` argument:** `D3D12CreateDevice`'s feature-level parameter is the
-*minimum* (a floor), not the device's capability. A device made with a `FL_1_0_CORE`
-floor on a 12_x GPU is still a full device — so the frontend wraps **every** non-WARP
-device returned, regardless of `fl` (an earlier `fl >= 11_0` gate wrongly skipped it).
+**Note on `fl`:** `D3D12CreateDevice`'s feature-level argument is the *minimum* (a floor),
+not the device's capability — TXR passes `FL_1_0_CORE` (0x1000) yet the device is a full
+12_x device. Never gate on it.
 
 ## Remaining work (to capture TXR specifically)
 
-1. **Reach UE5's private-path device at a COM-only boundary.** Options, hardest part
-   first: (a) hook `system d3d12.dll`'s internal device dispatch so the object UE5
-   receives is ours while D3D12Core keeps the raw one it constructed; (b) instead of a
-   COM wrapper at slot 7, vtable-hook the produced device's *own* command-creation slots
-   (Draw/queue/list) so capture works without replacing the object the runtime uses; this
-   sidesteps the internal-layout problem the wrapper hit.
-2. **Cover `ID3D12Device11-14` / `GraphicsCommandList8-10`** for the wrapper's QI by
-   vendoring Microsoft's MIT-licensed DirectX-Headers (mingw's max is `Device10`) so no
-   raw revision can ever leak on a recent Agility SDK. (Not currently the blocker — TXR
-   showed **0** device-QI leaks — but required for correctness on titles that do QI newer
-   revisions.)
-3. **Handle translation + remote** (the rgpu step-2 body, unchanged): GPU VA → resource
-   id+offset; CPU/GPU descriptor handle → heap id+index; COM ptr → object id; mapped
-   memory → uploaded byte ranges; fence → queue/fence id+value. Then D3D12 tee → local
-   replay → **remote Windows D3D12** backend (far more practical for SM6 than Linux
-   Vulkan) → Linux Vulkan last. A remote Windows D3D12 replay host is the fastest route
-   to a playable result and does not depend on cracking TXR's private device path.
+1. **Reach the internal queue.** The `ID3D12CoreModule` export table has ~18 entries
+   (entry 0 = `CreateDevice`); hook the others to find the **internal command-queue /
+   command-list / ExecuteCommandLists** entries the runtime and D3D11On12 use directly, and
+   canonical-patch the queues/lists they produce. Alternatively capture at the **D3D11On12**
+   layer (the game may be issuing D3D11 immediate-context draws that D3D11On12 translates to
+   D3D12) — hook `ID3D11DeviceContext` recording on the D3D11On12 device.
+2. **For a playable stream now:** acquire the present queue at swap-chain creation and
+   capture the back buffer at `Present` (video + input), which does **not** depend on
+   cracking the internal command path.
+3. **Handle translation + remote** (unchanged): GPU VA → resource id+offset; descriptor
+   handle → heap id+index; COM ptr → object id; mapped memory → byte ranges; fence →
+   queue/fence id+value. Then tee → local replay → **remote Windows D3D12** backend → Linux
+   Vulkan last.
+
+## Full D3D12 COM wrapper (harness-verified reference)
+
+`src/rgpu_d3d12_wrappers.h` (generated forwarders from `tools/gen_wrappers.py`) is the
+complete identity-preserving `RgpuD3D12Device`/`CommandQueue`/`GraphicsCommandList`
+object-graph (~191 methods, `WIDL_EXPLICIT_AGGREGATE_RETURNS` ABI). It is retained as the
+protocol-serialization reference and is the right interceptor for titles that expose a
+pure-COM device; it is **not** used for the TXR live path (substituting the device pointer
+crashes D3D12Core's concrete-layout code — the shadow/canonical in-place path above is used
+instead).
 
 ## Build / deploy
 

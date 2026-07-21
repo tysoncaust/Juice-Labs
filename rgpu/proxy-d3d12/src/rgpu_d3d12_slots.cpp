@@ -6,6 +6,7 @@
 #define CINTERFACE
 #include <windows.h>
 #include <d3d12.h>
+#include <dxgi1_2.h>
 #include <cstddef>
 
 #define SLOT(V, M) (unsigned)(offsetof(V, M) / sizeof(void *))
@@ -30,4 +31,9 @@ unsigned RGPU_SLOT_GCL6_DispatchMesh         = SLOT(ID3D12GraphicsCommandList6Vt
 unsigned RGPU_SLOT_GCL7_Barrier              = SLOT(ID3D12GraphicsCommandList7Vtbl, Barrier);         /* enhanced barriers (UE5 5.x) */
 unsigned RGPU_SLOT_Factory_CreateDevice      = SLOT(ID3D12DeviceFactoryVtbl, CreateDevice);
 unsigned RGPU_SLOT_SDKConfig1_CreateDeviceFactory = SLOT(ID3D12SDKConfiguration1Vtbl, CreateDeviceFactory);
+/* DXGI swap-chain creation. For D3D12 the swap chain's `pDevice` argument is the direct
+ * command QUEUE the swap chain presents from - i.e. the game's real render queue. */
+unsigned RGPU_SLOT_DXGIFactory_CreateSwapChain                = SLOT(IDXGIFactoryVtbl, CreateSwapChain);
+unsigned RGPU_SLOT_DXGIFactory2_CreateSwapChainForHwnd        = SLOT(IDXGIFactory2Vtbl, CreateSwapChainForHwnd);
+unsigned RGPU_SLOT_DXGIFactory2_CreateSwapChainForComposition = SLOT(IDXGIFactory2Vtbl, CreateSwapChainForComposition);
 }
