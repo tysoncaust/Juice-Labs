@@ -1,0 +1,254 @@
+﻿
+C:\Windows\System32\d3d12.dll:     file format pei-x86-64
+
+
+Disassembly of section .text:
+
+0000000180007f20 <.text+0x6f20>:
+   180007f20:	48 8b c4             	mov    %rsp,%rax
+   180007f23:	48 89 58 08          	mov    %rbx,0x8(%rax)
+   180007f27:	48 89 68 10          	mov    %rbp,0x10(%rax)
+   180007f2b:	48 89 70 18          	mov    %rsi,0x18(%rax)
+   180007f2f:	57                   	push   %rdi
+   180007f30:	48 83 ec 50          	sub    $0x50,%rsp
+   180007f34:	49 8b d9             	mov    %r9,%rbx
+   180007f37:	49 8b f8             	mov    %r8,%rdi
+   180007f3a:	8b f2                	mov    %edx,%esi
+   180007f3c:	48 8b e9             	mov    %rcx,%rbp
+   180007f3f:	48 8d 0d a2 6d 01 00 	lea    0x16da2(%rip),%rcx        # 0x18001ece8
+   180007f46:	48 89 48 e8          	mov    %rcx,-0x18(%rax)
+   180007f4a:	c6 40 f0 01          	movb   $0x1,-0x10(%rax)
+   180007f4e:	e8 c1 2c 00 00       	call   0x18000ac14
+   180007f53:	90                   	nop
+   180007f54:	48 8d 54 24 40       	lea    0x40(%rsp),%rdx
+   180007f59:	48 8d 0d 80 6d 01 00 	lea    0x16d80(%rip),%rcx        # 0x18001ece0
+   180007f60:	e8 af 81 00 00       	call   0x180010114
+   180007f65:	8b 15 55 6f 01 00    	mov    0x16f55(%rip),%edx        # 0x18001eec0
+   180007f6b:	65 48 8b 0c 25 58 00 	mov    %gs:0x58,%rcx
+   180007f72:	00 00 
+   180007f74:	41 b9 08 00 00 00    	mov    $0x8,%r9d
+   180007f7a:	48 8b 14 d1          	mov    (%rcx,%rdx,8),%rdx
+   180007f7e:	48 8b 0d db 6d 01 00 	mov    0x16ddb(%rip),%rcx        # 0x18001ed60
+   180007f85:	49 89 0c 11          	mov    %rcx,(%r9,%rdx,1)
+   180007f89:	48 89 5c 24 30       	mov    %rbx,0x30(%rsp)
+   180007f8e:	48 89 7c 24 28       	mov    %rdi,0x28(%rsp)
+   180007f93:	48 c7 44 24 20 01 00 	movq   $0x1,0x20(%rsp)
+   180007f9a:	00 00 
+   180007f9c:	4c 8d 0d c5 e2 00 00 	lea    0xe2c5(%rip),%r9        # 0x180016268
+   180007fa3:	41 b0 01             	mov    $0x1,%r8b
+   180007fa6:	8b d6                	mov    %esi,%edx
+   180007fa8:	48 8b cd             	mov    %rbp,%rcx
+   180007fab:	48 8b 00             	mov    (%rax),%rax
+   180007fae:	e8 5d d0 00 00       	call   0x180015010
+   180007fb3:	8b d8                	mov    %eax,%ebx
+   180007fb5:	80 7c 24 48 00       	cmpb   $0x0,0x48(%rsp)
+   180007fba:	75 18                	jne    0x180007fd4
+   180007fbc:	8b c3                	mov    %ebx,%eax
+   180007fbe:	48 8b 5c 24 60       	mov    0x60(%rsp),%rbx
+   180007fc3:	48 8b 6c 24 68       	mov    0x68(%rsp),%rbp
+   180007fc8:	48 8b 74 24 70       	mov    0x70(%rsp),%rsi
+   180007fcd:	48 83 c4 50          	add    $0x50,%rsp
+   180007fd1:	5f                   	pop    %rdi
+   180007fd2:	c3                   	ret
+   180007fd3:	cc                   	int3
+   180007fd4:	48 8b 4c 24 40       	mov    0x40(%rsp),%rcx
+   180007fd9:	e8 56 2c 00 00       	call   0x18000ac34
+   180007fde:	eb dc                	jmp    0x180007fbc
+   180007fe0:	cc                   	int3
+   180007fe1:	cc                   	int3
+   180007fe2:	cc                   	int3
+   180007fe3:	cc                   	int3
+   180007fe4:	cc                   	int3
+   180007fe5:	cc                   	int3
+   180007fe6:	cc                   	int3
+   180007fe7:	cc                   	int3
+   180007fe8:	cc                   	int3
+   180007fe9:	cc                   	int3
+   180007fea:	cc                   	int3
+   180007feb:	cc                   	int3
+   180007fec:	cc                   	int3
+   180007fed:	cc                   	int3
+   180007fee:	cc                   	int3
+   180007fef:	cc                   	int3
+   180007ff0:	48 8d 05 79 e8 ff ff 	lea    -0x1787(%rip),%rax        # 0x180006870
+   180007ff7:	48 89 05 62 4d 01 00 	mov    %rax,0x14d62(%rip)        # 0x18001cd60
+   180007ffe:	48 8d 05 1b 18 00 00 	lea    0x181b(%rip),%rax        # 0x180009820
+   180008005:	48 89 05 5c 4c 01 00 	mov    %rax,0x14c5c(%rip)        # 0x18001cc68
+   18000800c:	48 8d 05 ed fb ff ff 	lea    -0x413(%rip),%rax        # 0x180007c00
+   180008013:	48 89 05 96 4c 01 00 	mov    %rax,0x14c96(%rip)        # 0x18001ccb0
+   18000801a:	48 8d 05 4f e7 ff ff 	lea    -0x18b1(%rip),%rax        # 0x180006770
+   180008021:	48 89 05 48 4d 01 00 	mov    %rax,0x14d48(%rip)        # 0x18001cd70
+   180008028:	48 8d 05 21 64 00 00 	lea    0x6421(%rip),%rax        # 0x18000e450
+   18000802f:	48 89 05 8a 4c 01 00 	mov    %rax,0x14c8a(%rip)        # 0x18001ccc0
+   180008036:	48 8d 05 e3 11 00 00 	lea    0x11e3(%rip),%rax        # 0x180009220
+   18000803d:	48 89 05 1c 4c 01 00 	mov    %rax,0x14c1c(%rip)        # 0x18001cc60
+   180008044:	c3                   	ret
+   180008045:	cc                   	int3
+   180008046:	cc                   	int3
+   180008047:	cc                   	int3
+   180008048:	cc                   	int3
+   180008049:	cc                   	int3
+   18000804a:	cc                   	int3
+   18000804b:	cc                   	int3
+   18000804c:	48 89 5c 24 08       	mov    %rbx,0x8(%rsp)
+   180008051:	48 89 74 24 10       	mov    %rsi,0x10(%rsp)
+   180008056:	57                   	push   %rdi
+   180008057:	48 83 ec 20          	sub    $0x20,%rsp
+   18000805b:	49 8b d9             	mov    %r9,%rbx
+   18000805e:	48 8b f1             	mov    %rcx,%rsi
+   180008061:	4d 85 c0             	test   %r8,%r8
+   180008064:	74 2a                	je     0x180008090
+   180008066:	4b 8d 3c 00          	lea    (%r8,%r8,1),%rdi
+   18000806a:	48 8b cb             	mov    %rbx,%rcx
+   18000806d:	4c 8b c7             	mov    %rdi,%r8
+   180008070:	e8 d3 bf 00 00       	call   0x180014048
+   180008075:	48 8d 04 1f          	lea    (%rdi,%rbx,1),%rax
+   180008079:	48 89 06             	mov    %rax,(%rsi)
+   18000807c:	48 8b 5c 24 30       	mov    0x30(%rsp),%rbx
+   180008081:	48 8b c6             	mov    %rsi,%rax
+   180008084:	48 8b 74 24 38       	mov    0x38(%rsp),%rsi
+   180008089:	48 83 c4 20          	add    $0x20,%rsp
+   18000808d:	5f                   	pop    %rdi
+   18000808e:	c3                   	ret
+   18000808f:	cc                   	int3
+   180008090:	48 89 19             	mov    %rbx,(%rcx)
+   180008093:	eb e7                	jmp    0x18000807c
+   180008095:	cc                   	int3
+   180008096:	cc                   	int3
+   180008097:	cc                   	int3
+   180008098:	cc                   	int3
+   180008099:	cc                   	int3
+   18000809a:	cc                   	int3
+   18000809b:	cc                   	int3
+   18000809c:	cc                   	int3
+   18000809d:	cc                   	int3
+   18000809e:	cc                   	int3
+   18000809f:	cc                   	int3
+   1800080a0:	48 83 ec 28          	sub    $0x28,%rsp
+   1800080a4:	ba 02 00 00 00       	mov    $0x2,%edx
+   1800080a9:	48 8d 0d b8 6c 01 00 	lea    0x16cb8(%rip),%rcx        # 0x18001ed68
+   1800080b0:	48 ff 15 e9 e9 00 00 	rex.W call *0xe9e9(%rip)        # 0x180016aa0
+   1800080b7:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
+   1800080bc:	48 8d 0d 3d 11 00 00 	lea    0x113d(%rip),%rcx        # 0x180009200
+   1800080c3:	48 83 c4 28          	add    $0x28,%rsp
+   1800080c7:	e9 68 33 00 00       	jmp    0x18000b434
+   1800080cc:	cc                   	int3
+   1800080cd:	cc                   	int3
+   1800080ce:	cc                   	int3
+   1800080cf:	cc                   	int3
+   1800080d0:	cc                   	int3
+   1800080d1:	cc                   	int3
+   1800080d2:	cc                   	int3
+   1800080d3:	cc                   	int3
+   1800080d4:	48 89 5c 24 20       	mov    %rbx,0x20(%rsp)
+   1800080d9:	55                   	push   %rbp
+   1800080da:	56                   	push   %rsi
+   1800080db:	57                   	push   %rdi
+   1800080dc:	b8 20 15 00 00       	mov    $0x1520,%eax
+   1800080e1:	e8 ea be 00 00       	call   0x180013fd0
+   1800080e6:	48 2b e0             	sub    %rax,%rsp
+   1800080e9:	48 8b 9c 24 68 15 00 	mov    0x1568(%rsp),%rbx
+   1800080f0:	00 
+   1800080f1:	49 8b e8             	mov    %r8,%rbp
+   1800080f4:	8b f2                	mov    %edx,%esi
+   1800080f6:	48 8b f9             	mov    %rcx,%rdi
+   1800080f9:	33 d2                	xor    %edx,%edx
+   1800080fb:	48 8d 8c 24 80 00 00 	lea    0x80(%rsp),%rcx
+   180008102:	00 
+   180008103:	41 b8 98 00 00 00    	mov    $0x98,%r8d
+   180008109:	e8 1a 3c 00 00       	call   0x18000bd28
+   18000810e:	48 8d 84 24 80 00 00 	lea    0x80(%rsp),%rax
+   180008115:	00 
+   180008116:	45 33 c9             	xor    %r9d,%r9d
+   180008119:	48 89 44 24 70       	mov    %rax,0x70(%rsp)
+   18000811e:	4c 8b c5             	mov    %rbp,%r8
+   180008121:	48 8d 84 24 20 01 00 	lea    0x120(%rsp),%rax
+   180008128:	00 
+   180008129:	8b d6                	mov    %esi,%edx
+   18000812b:	48 89 44 24 60       	mov    %rax,0x60(%rsp)
+   180008130:	48 8b cf             	mov    %rdi,%rcx
+   180008133:	48 8d 84 24 20 05 00 	lea    0x520(%rsp),%rax
+   18000813a:	00 
+   18000813b:	48 89 44 24 50       	mov    %rax,0x50(%rsp)
+   180008140:	48 83 64 24 40 00    	andq   $0x0,0x40(%rsp)
+   180008146:	48 8b 84 24 70 15 00 	mov    0x1570(%rsp),%rax
+   18000814d:	00 
+   18000814e:	48 89 44 24 38       	mov    %rax,0x38(%rsp)
+   180008153:	c7 44 24 30 03 00 00 	movl   $0x3,0x30(%rsp)
+   18000815a:	00 
+   18000815b:	48 89 5c 24 28       	mov    %rbx,0x28(%rsp)
+   180008160:	48 83 64 24 20 00    	andq   $0x0,0x20(%rsp)
+   180008166:	e8 2d 07 00 00       	call   0x180008898
+   18000816b:	48 8d 8c 24 80 00 00 	lea    0x80(%rsp),%rcx
+   180008172:	00 
+   180008173:	e8 2c 0a 00 00       	call   0x180008ba4
+   180008178:	cc                   	int3
+   180008179:	cc                   	int3
+   18000817a:	cc                   	int3
+   18000817b:	cc                   	int3
+   18000817c:	cc                   	int3
+   18000817d:	cc                   	int3
+   18000817e:	cc                   	int3
+   18000817f:	cc                   	int3
+   180008180:	4c 8b dc             	mov    %rsp,%r11
+   180008183:	53                   	push   %rbx
+   180008184:	48 83 ec 60          	sub    $0x60,%rsp
+   180008188:	41 8b d9             	mov    %r9d,%ebx
+   18000818b:	49 8d 43 30          	lea    0x30(%r11),%rax
+   18000818f:	4c 8b 54 24 68       	mov    0x68(%rsp),%r10
+   180008194:	49 89 43 d8          	mov    %rax,-0x28(%r11)
+   180008198:	49 8b 43 28          	mov    0x28(%r11),%rax
+   18000819c:	49 89 43 d0          	mov    %rax,-0x30(%r11)
+   1800081a0:	89 5c 24 30          	mov    %ebx,0x30(%rsp)
+   1800081a4:	4d 89 53 c0          	mov    %r10,-0x40(%r11)
+   1800081a8:	e8 e3 01 00 00       	call   0x180008390
+   1800081ad:	8b c3                	mov    %ebx,%eax
+   1800081af:	48 83 c4 60          	add    $0x60,%rsp
+   1800081b3:	5b                   	pop    %rbx
+   1800081b4:	c3                   	ret
+   1800081b5:	cc                   	int3
+   1800081b6:	cc                   	int3
+   1800081b7:	cc                   	int3
+   1800081b8:	cc                   	int3
+   1800081b9:	cc                   	int3
+   1800081ba:	cc                   	int3
+   1800081bb:	cc                   	int3
+   1800081bc:	48 89 5c 24 18       	mov    %rbx,0x18(%rsp)
+   1800081c1:	48 89 74 24 20       	mov    %rsi,0x20(%rsp)
+   1800081c6:	57                   	push   %rdi
+   1800081c7:	b8 30 15 00 00       	mov    $0x1530,%eax
+   1800081cc:	e8 ff bd 00 00       	call   0x180013fd0
+   1800081d1:	48 2b e0             	sub    %rax,%rsp
+   1800081d4:	48 8b 05 25 42 01 00 	mov    0x14225(%rip),%rax        # 0x18001c400
+   1800081db:	48 33 c4             	xor    %rsp,%rax
+   1800081de:	48 89 84 24 20 15 00 	mov    %rax,0x1520(%rsp)
+   1800081e5:	00 
+   1800081e6:	48 8b 9c 24 68 15 00 	mov    0x1568(%rsp),%rbx
+   1800081ed:	00 
+   1800081ee:	8b f2                	mov    %edx,%esi
+   1800081f0:	48 8b f9             	mov    %rcx,%rdi
+   1800081f3:	33 d2                	xor    %edx,%edx
+   1800081f5:	48 8d 8c 24 80 00 00 	lea    0x80(%rsp),%rcx
+   1800081fc:	00 
+   1800081fd:	41 b8 98 00 00 00    	mov    $0x98,%r8d
+   180008203:	e8 20 3b 00 00       	call   0x18000bd28
+   180008208:	48 8d 84 24 80 00 00 	lea    0x80(%rsp),%rax
+   18000820f:	00 
+   180008210:	45 33 c9             	xor    %r9d,%r9d
+   180008213:	48 89 44 24 70       	mov    %rax,0x70(%rsp)
+   180008218:	4c 8d 05 99 ef 00 00 	lea    0xef99(%rip),%r8        # 0x1800171b8
+   18000821f:	48 8d 84 24 20 01 00 	lea    0x120(%rsp),%rax
+   180008226:	00 
+   180008227:	8b d6                	mov    %esi,%edx
+   180008229:	48 89 44 24 60       	mov    %rax,0x60(%rsp)
+   18000822e:	48 8b cf             	mov    %rdi,%rcx
+   180008231:	48 8d 84 24 20 05 00 	lea    0x520(%rsp),%rax
+   180008238:	00 
+   180008239:	48 89 44 24 50       	mov    %rax,0x50(%rsp)
+   18000823e:	48 83 64 24 40 00    	andq   $0x0,0x40(%rsp)
+   180008244:	48 8b 84 24 70 15 00 	mov    0x1570(%rsp),%rax
+   18000824b:	00 
+   18000824c:	48                   	rex.W
+   18000824d:	89                   	.byte 0x89
+   18000824e:	44                   	rex.R
+   18000824f:	24                   	.byte 0x24

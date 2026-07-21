@@ -1,0 +1,3 @@
+﻿
+C:\Windows\System32\d3d12.dll:     file format pei-x86-64
+

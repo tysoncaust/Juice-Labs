@@ -1,0 +1,143 @@
+﻿
+C:\Windows\System32\d3d12.dll:     file format pei-x86-64
+
+
+Disassembly of section .text:
+
+0000000180006b30 <.text+0x5b30>:
+   180006b30:	f6 05 c9 62 01 00 04 	testb  $0x4,0x162c9(%rip)        # 0x18001ce00
+   180006b37:	75 02                	jne    0x180006b3b
+   180006b39:	c3                   	ret
+   180006b3a:	cc                   	int3
+   180006b3b:	4c 8b c1             	mov    %rcx,%r8
+   180006b3e:	e9 e9 28 00 00       	jmp    0x18000942c
+   180006b43:	cc                   	int3
+   180006b44:	cc                   	int3
+   180006b45:	cc                   	int3
+   180006b46:	cc                   	int3
+   180006b47:	cc                   	int3
+   180006b48:	cc                   	int3
+   180006b49:	cc                   	int3
+   180006b4a:	cc                   	int3
+   180006b4b:	cc                   	int3
+   180006b4c:	cc                   	int3
+   180006b4d:	cc                   	int3
+   180006b4e:	cc                   	int3
+   180006b4f:	cc                   	int3
+   180006b50:	48 89 5c 24 08       	mov    %rbx,0x8(%rsp)
+   180006b55:	48 89 6c 24 10       	mov    %rbp,0x10(%rsp)
+   180006b5a:	48 89 74 24 18       	mov    %rsi,0x18(%rsp)
+   180006b5f:	57                   	push   %rdi
+   180006b60:	48 83 ec 30          	sub    $0x30,%rsp
+   180006b64:	48 8b e9             	mov    %rcx,%rbp
+   180006b67:	49 8b d9             	mov    %r9,%rbx
+   180006b6a:	48 8d 0d af 13 00 00 	lea    0x13af(%rip),%rcx        # 0x180007f20
+   180006b71:	49 8b f8             	mov    %r8,%rdi
+   180006b74:	8b f2                	mov    %edx,%esi
+   180006b76:	e8 2d 00 00 00       	call   0x180006ba8
+   180006b7b:	4c 8b cb             	mov    %rbx,%r9
+   180006b7e:	4c 8b c7             	mov    %rdi,%r8
+   180006b81:	8b d6                	mov    %esi,%edx
+   180006b83:	48 8b cd             	mov    %rbp,%rcx
+   180006b86:	e8 85 e4 00 00       	call   0x180015010
+   180006b8b:	48 8b 5c 24 40       	mov    0x40(%rsp),%rbx
+   180006b90:	48 8b 6c 24 48       	mov    0x48(%rsp),%rbp
+   180006b95:	48 8b 74 24 50       	mov    0x50(%rsp),%rsi
+   180006b9a:	48 83 c4 30          	add    $0x30,%rsp
+   180006b9e:	5f                   	pop    %rdi
+   180006b9f:	c3                   	ret
+   180006ba0:	cc                   	int3
+   180006ba1:	cc                   	int3
+   180006ba2:	cc                   	int3
+   180006ba3:	cc                   	int3
+   180006ba4:	cc                   	int3
+   180006ba5:	cc                   	int3
+   180006ba6:	cc                   	int3
+   180006ba7:	cc                   	int3
+   180006ba8:	4c 89 44 24 18       	mov    %r8,0x18(%rsp)
+   180006bad:	48 89 54 24 10       	mov    %rdx,0x10(%rsp)
+   180006bb2:	55                   	push   %rbp
+   180006bb3:	53                   	push   %rbx
+   180006bb4:	56                   	push   %rsi
+   180006bb5:	57                   	push   %rdi
+   180006bb6:	41 56                	push   %r14
+   180006bb8:	48 8b ec             	mov    %rsp,%rbp
+   180006bbb:	48 83 ec 50          	sub    $0x50,%rsp
+   180006bbf:	48 83 65 f0 00       	andq   $0x0,-0x10(%rbp)
+   180006bc4:	4c 8d 45 f0          	lea    -0x10(%rbp),%r8
+   180006bc8:	48 8b f1             	mov    %rcx,%rsi
+   180006bcb:	48 8d 15 4e 05 01 00 	lea    0x1054e(%rip),%rdx        # 0x180017120
+   180006bd2:	33 c9                	xor    %ecx,%ecx
+   180006bd4:	48 ff 15 7d fb 00 00 	rex.W call *0xfb7d(%rip)        # 0x180016758
+   180006bdb:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
+   180006be0:	44 8b f0             	mov    %eax,%r14d
+   180006be3:	85 c0                	test   %eax,%eax
+   180006be5:	75 3b                	jne    0x180006c22
+   180006be7:	4c 8d 05 12 05 01 00 	lea    0x10512(%rip),%r8        # 0x180017100
+   180006bee:	33 d2                	xor    %edx,%edx
+   180006bf0:	b9 00 00 10 00       	mov    $0x100000,%ecx
+   180006bf5:	48 ff 15 d4 fc 00 00 	rex.W call *0xfcd4(%rip)        # 0x1800168d0
+   180006bfc:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
+   180006c01:	48 85 c0             	test   %rax,%rax
+   180006c04:	0f 85 bb 00 00 00    	jne    0x180006cc5
+   180006c0a:	48 8b 45 f0          	mov    -0x10(%rbp),%rax
+   180006c0e:	48 85 c0             	test   %rax,%rax
+   180006c11:	75 18                	jne    0x180006c2b
+   180006c13:	48 8b c6             	mov    %rsi,%rax
+   180006c16:	48 83 c4 50          	add    $0x50,%rsp
+   180006c1a:	41 5e                	pop    %r14
+   180006c1c:	5f                   	pop    %rdi
+   180006c1d:	5e                   	pop    %rsi
+   180006c1e:	5b                   	pop    %rbx
+   180006c1f:	5d                   	pop    %rbp
+   180006c20:	c3                   	ret
+   180006c21:	cc                   	int3
+   180006c22:	48 8b 45 f0          	mov    -0x10(%rbp),%rax
+   180006c26:	48 85 c0             	test   %rax,%rax
+   180006c29:	74 bc                	je     0x180006be7
+   180006c2b:	48 8d 15 d6 0b 01 00 	lea    0x10bd6(%rip),%rdx        # 0x180017808
+   180006c32:	48 8b c8             	mov    %rax,%rcx
+   180006c35:	48 ff 15 2c fb 00 00 	rex.W call *0xfb2c(%rip)        # 0x180016768
+   180006c3c:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
+   180006c41:	48 85 c0             	test   %rax,%rax
+   180006c44:	0f 84 54 01 00 00    	je     0x180006d9e
+   180006c4a:	e8 c1 e3 00 00       	call   0x180015010
+   180006c4f:	85 c0                	test   %eax,%eax
+   180006c51:	0f 88 47 01 00 00    	js     0x180006d9e
+   180006c57:	48 8b 4d f0          	mov    -0x10(%rbp),%rcx
+   180006c5b:	48 8d 15 ee 0a 01 00 	lea    0x10aee(%rip),%rdx        # 0x180017750
+   180006c62:	48 ff 15 ff fa 00 00 	rex.W call *0xfaff(%rip)        # 0x180016768
+   180006c69:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
+   180006c6e:	48 8b 4d f0          	mov    -0x10(%rbp),%rcx
+   180006c72:	48 8d 15 b7 0a 01 00 	lea    0x10ab7(%rip),%rdx        # 0x180017730
+   180006c79:	48 8b f8             	mov    %rax,%rdi
+   180006c7c:	48 ff 15 e5 fa 00 00 	rex.W call *0xfae5(%rip)        # 0x180016768
+   180006c83:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
+   180006c88:	48 8b d8             	mov    %rax,%rbx
+   180006c8b:	48 85 ff             	test   %rdi,%rdi
+   180006c8e:	0f 84 0a 01 00 00    	je     0x180006d9e
+   180006c94:	48 85 c0             	test   %rax,%rax
+   180006c97:	0f 84 01 01 00 00    	je     0x180006d9e
+   180006c9d:	45 85 f6             	test   %r14d,%r14d
+   180006ca0:	74 10                	je     0x180006cb2
+   180006ca2:	48 8b 4d f0          	mov    -0x10(%rbp),%rcx
+   180006ca6:	48 ff 15 93 fa 00 00 	rex.W call *0xfa93(%rip)        # 0x180016740
+   180006cad:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
+   180006cb2:	48 8b c7             	mov    %rdi,%rax
+   180006cb5:	e8 56 e3 00 00       	call   0x180015010
+   180006cba:	48 89 30             	mov    %rsi,(%rax)
+   180006cbd:	48 8b c3             	mov    %rbx,%rax
+   180006cc0:	e9 51 ff ff ff       	jmp    0x180006c16
+   180006cc5:	48 8b c8             	mov    %rax,%rcx
+   180006cc8:	48 ff 15 09 fa 00 00 	rex.W call *0xfa09(%rip)        # 0x1800166d8
+   180006ccf:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
+   180006cd4:	48 83 65 f8 00       	andq   $0x0,-0x8(%rbp)
+   180006cd9:	48 8d 45 f8          	lea    -0x8(%rbp),%rax
+   180006cdd:	41 b9 19 00 02 00    	mov    $0x20019,%r9d
+   180006ce3:	48 89 44 24 20       	mov    %rax,0x20(%rsp)
+   180006ce8:	45 33 c0             	xor    %r8d,%r8d
+   180006ceb:	48                   	rex.W
+   180006cec:	8d                   	.byte 0x8d
+   180006ced:	15                   	.byte 0x15
+   180006cee:	56                   	push   %rsi
+   180006cef:	0b                   	.byte 0xb

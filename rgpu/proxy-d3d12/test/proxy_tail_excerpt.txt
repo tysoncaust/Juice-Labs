@@ -1,0 +1,180 @@
+301: typedef HRESULT (STDMETHODCALLTYPE *fnDevCCL1)(ID3D12Device4 *, UINT, D3D12_COMMAND_LIST_TYPE, D3D12_COMMAND_LIST_FLAGS, REFIID, void **);
+302: static fnDevCCQ o_DevCCQ; static fnDevCCQ1 o_DevCCQ1; static fnDevCCL o_DevCCL; static fnDevCCL1 o_DevCCL1;
+303: static void once_log(volatile LONG *g, const char *m) { if (InterlockedCompareExchange(g, 1, 0) == 0) rgpu_log("%s", m); }
+304: static volatile LONG l_ccq=0, l_ccq1=0, l_ccl=0, l_ccl1=0, l_cfs=0;
+305: typedef HRESULT (STDMETHODCALLTYPE *fnCFS)(ID3D12Device *, D3D12_FEATURE, void *, UINT);
+306: static fnCFS o_CFS;
+307: static HRESULT STDMETHODCALLTYPE h_CFS(ID3D12Device *T, D3D12_FEATURE f, void *d, UINT n){ once_log(&l_cfs,"game USES our hooked device (CheckFeatureSupport fired) -> device object is right"); return o_CFS(T,f,d,n); }
+308: static HRESULT STDMETHODCALLTYPE h_DevCCQ(ID3D12Device *T, const D3D12_COMMAND_QUEUE_DESC *d, REFIID r, void **pp){ once_log(&l_ccq,"game called CreateCommandQueue (base)"); HRESULT hr=o_DevCCQ(T,d,r,pp); if(SUCCEEDED(hr)&&pp)arm_queue_from_any(*pp); return hr; }
+309: static HRESULT STDMETHODCALLTYPE h_DevCCQ1(ID3D12Device9 *T, const D3D12_COMMAND_QUEUE_DESC *d, REFIID c, REFIID r, void **pp){ once_log(&l_ccq1,"game called CreateCommandQueue1 (Agility)"); HRESULT hr=o_DevCCQ1(T,d,c,r,pp); if(SUCCEEDED(hr)&&pp)arm_queue_from_any(*pp); return hr; }
+310: static HRESULT STDMETHODCALLTYPE h_DevCCL(ID3D12Device *T, UINT nm, D3D12_COMMAND_LIST_TYPE ty, ID3D12CommandAllocator *a, ID3D12PipelineState *ps, REFIID r, void **pp){ once_log(&l_ccl,"game called CreateCommandList (base)"); HRESULT hr=o_DevCCL(T,nm,ty,a,ps,r,pp); if(SUCCEEDED(hr)&&pp)arm_list_from_any(*pp); return hr; }
+311: static HRESULT STDMETHODCALLTYPE h_DevCCL1(ID3D12Device4 *T, UINT nm, D3D12_COMMAND_LIST_TYPE ty, D3D12_COMMAND_LIST_FLAGS f, REFIID r, void **pp){ once_log(&l_ccl1,"game called CreateCommandList1 (Agility)"); HRESULT hr=o_DevCCL1(T,nm,ty,f,r,pp); if(SUCCEEDED(hr)&&pp)arm_list_from_any(*pp); return hr; }
+312: 
+313: /* Inline-hook device methods from the real returned interface. This survives
+314:  * UE4SS/overlay vtable replacement just like the queue/list inline hooks. */
+315: static void arm_from_device(ID3D12Device *dev, const char *which) {
+316:     if (!dev) return;
+317: 
+318:     ID3D12Device *base = nullptr;
+319:     ID3D12Device4 *d4 = nullptr;
+320:     ID3D12Device9 *d9 = nullptr;
+321:     dev->QueryInterface(__uuidof(ID3D12Device), (void **)&base);
+322:     dev->QueryInterface(__uuidof(ID3D12Device4), (void **)&d4);
+323:     dev->QueryInterface(__uuidof(ID3D12Device9), (void **)&d9);
+324: 
+325:     void *bv = base ? *(void **)base : nullptr;
+326:     void *v4 = d4 ? *(void **)d4 : nullptr;
+327:     void *v9 = d9 ? *(void **)d9 : nullptr;
+328: 
+329:     HookItem items[5]; int n = 0;
+330:     auto add = [&](void *obj, unsigned slot, void *detour, void **orig, const char *name) {
+331:         if (obj && !*orig && n < 5) items[n++] = { vslot(obj, slot), detour, orig, name };
+332:     };
+333:     add(base, RGPU_SLOT_Device_CheckFeatureSupport, (void *)h_CFS, (void **)&o_CFS,
+334:         "Device::CheckFeatureSupport");
+335:     add(base, RGPU_SLOT_Device_CreateCommandQueue, (void *)h_DevCCQ, (void **)&o_DevCCQ,
+336:         "Device::CreateCommandQueue");
+337:     add(base, RGPU_SLOT_Device_CreateCommandList, (void *)h_DevCCL, (void **)&o_DevCCL,
+338:         "Device::CreateCommandList");
+339:     add(d4, RGPU_SLOT_Device4_CreateCommandList1, (void *)h_DevCCL1, (void **)&o_DevCCL1,
+340:         "Device4::CreateCommandList1");
+341:     add(d9, RGPU_SLOT_Device9_CreateCommandQueue1, (void *)h_DevCCQ1, (void **)&o_DevCCQ1,
+342:         "Device9::CreateCommandQueue1");
+343:     install_batch_frozen(items, n);
+344: 
+345:     /* The conservative inline decoder can reject some base-method prologues.
+346:      * Keep a safe vtable fallback for those exact methods; the Agility 1 methods
+347:      * remain inline-hooked and therefore survive later overlay vtable changes. */
+348:     bool fbCFS = false, fbCCQ = false, fbCCL = false, fbCCQ1 = false, fbCCL1 = false;
+349:     if (base && !o_CFS) fbCFS = patch_slot(base, RGPU_SLOT_Device_CheckFeatureSupport,
+350:                                             (void *)h_CFS, (void **)&o_CFS);
+351:     if (base && !o_DevCCQ) fbCCQ = patch_slot(base, RGPU_SLOT_Device_CreateCommandQueue,
+352:                                               (void *)h_DevCCQ, (void **)&o_DevCCQ);
+353:     if (base && !o_DevCCL) fbCCL = patch_slot(base, RGPU_SLOT_Device_CreateCommandList,
+354:                                               (void *)h_DevCCL, (void **)&o_DevCCL);
+355:     if (d9 && !o_DevCCQ1) fbCCQ1 = patch_slot(d9, RGPU_SLOT_Device9_CreateCommandQueue1,
+356:                                                (void *)h_DevCCQ1, (void **)&o_DevCCQ1);
+357:     if (d4 && !o_DevCCL1) fbCCL1 = patch_slot(d4, RGPU_SLOT_Device4_CreateCommandList1,
+358:                                                (void *)h_DevCCL1, (void **)&o_DevCCL1);
+359: 
+360:     rgpu_log("armed-hybrid %s device input=%p base=%p/vtbl=%p d4=%p/vtbl=%p d9=%p/vtbl=%p originals CFS=%p CCQ=%p CCL=%p CCQ1=%p CCL1=%p fallback=%d/%d/%d/%d/%d",
+361:              which, (void *)dev, (void *)base, bv, (void *)d4, v4, (void *)d9, v9,
+362:              (void *)o_CFS, (void *)o_DevCCQ, (void *)o_DevCCL,
+363:              (void *)o_DevCCQ1, (void *)o_DevCCL1,
+364:              fbCFS, fbCCQ, fbCCL, fbCCQ1, fbCCL1);
+365: 
+366:     if (d9) d9->Release();
+367:     if (d4) d4->Release();
+368:     if (base) base->Release();
+369: }
+370: 
+371: static bool adapter_is_warp(IUnknown *adapter) {
+372:     if (!adapter) return false;   /* null == default hardware adapter */
+373:     IDXGIAdapter *a = nullptr;
+374:     if (SUCCEEDED(adapter->QueryInterface(__uuidof(IDXGIAdapter), (void **)&a)) && a) {
+375:         DXGI_ADAPTER_DESC d{}; a->GetDesc(&d); a->Release();
+376:         return d.VendorId == 0x1414;   /* Microsoft Basic Render Driver (WARP) */
+377:     }
+378:     return false;
+379: }
+380: 
+381: /* ID3D12DeviceFactory::CreateDevice hook - modern UE5+Agility titles create their
+382:  * REAL rendering device here (via D3D12GetInterface), not via the plain
+383:  * D3D12CreateDevice export, so this is where we must arm the tee. */
+384: typedef HRESULT (STDMETHODCALLTYPE *fnFactoryCreateDevice)(ID3D12DeviceFactory *, IUnknown *, D3D_FEATURE_LEVEL, REFIID, void **);
+385: static fnFactoryCreateDevice o_FactoryCreateDevice;
+386: static void *g_hooked_factory_vtbl = nullptr;
+387: static volatile LONG g_sdk_config_hooks = 0;
+388: static volatile LONG g_sdk_factory_calls = 0;
+389: static volatile LONG g_factory_device_calls = 0;
+390: 
+391: static HRESULT STDMETHODCALLTYPE h_FactoryCreateDevice(ID3D12DeviceFactory *This, IUnknown *adapter,
+392:                                                         D3D_FEATURE_LEVEL fl, REFIID riid, void **pp);
+393: 
+394: static bool hook_factory_object(void *obj) {
+395:     if (!obj) return false;
+396:     ID3D12DeviceFactory *factory = nullptr;
+397:     if (FAILED(((IUnknown *)obj)->QueryInterface(__uuidof(ID3D12DeviceFactory), (void **)&factory)) || !factory)
+398:         return false;
+399:     void *vtbl = *(void **)factory;
+400:     bool ok = true;
+401:     if (vtbl != g_hooked_factory_vtbl) {
+402:         ok = patch_slot(factory, RGPU_SLOT_Factory_CreateDevice,
+403:                         (void *)h_FactoryCreateDevice, (void **)&o_FactoryCreateDevice);
+404:         if (ok) {
+405:             g_hooked_factory_vtbl = vtbl;
+406:             rgpu_log("hooked ID3D12DeviceFactory::CreateDevice factory=%p vtbl=%p",
+407:                      (void *)factory, vtbl);
+408:         }
+409:     }
+410:     factory->Release();
+411:     return ok;
+412: }
+413: 
+414: static HRESULT STDMETHODCALLTYPE h_FactoryCreateDevice(ID3D12DeviceFactory *This, IUnknown *adapter, D3D_FEATURE_LEVEL fl, REFIID riid, void **pp) {
+415:     InterlockedIncrement(&g_factory_device_calls);
+416:     HRESULT hr = o_FactoryCreateDevice(This, adapter, fl, riid, pp);
+417:     bool warp = adapter_is_warp(adapter);
+418:     rgpu_log("ID3D12DeviceFactory::CreateDevice fl=0x%X adapter=%s -> hr=0x%08lX device=%p",
+419:              (unsigned)fl, warp ? "WARP" : "hardware", (unsigned long)hr, pp ? *pp : nullptr);
+420:     if (SUCCEEDED(hr) && pp && *pp && !warp) arm_from_device((ID3D12Device *)*pp, "DeviceFactory");
+421:     return hr;
+422: }
+423: 
+424: typedef HRESULT (STDMETHODCALLTYPE *fnSDKCreateDeviceFactory)(ID3D12SDKConfiguration1 *, UINT, LPCSTR, REFIID, void **);
+425: static fnSDKCreateDeviceFactory o_SDKCreateDeviceFactory;
+426: static void *g_hooked_sdkconfig_vtbl = nullptr;
+427: 
+428: static HRESULT STDMETHODCALLTYPE h_SDKCreateDeviceFactory(ID3D12SDKConfiguration1 *This, UINT sdkVersion,
+429:                                                           LPCSTR sdkPath, REFIID riid, void **ppFactory) {
+430:     InterlockedIncrement(&g_sdk_factory_calls);
+431:     HRESULT hr = o_SDKCreateDeviceFactory(This, sdkVersion, sdkPath, riid, ppFactory);
+432:     rgpu_log("ID3D12SDKConfiguration1::CreateDeviceFactory sdk=%u path=\"%s\" -> hr=0x%08lX factory=%p",
+433:              sdkVersion, sdkPath ? sdkPath : "(null)", (unsigned long)hr,
+434:              ppFactory ? *ppFactory : nullptr);
+435:     if (SUCCEEDED(hr) && ppFactory && *ppFactory) hook_factory_object(*ppFactory);
+436:     return hr;
+437: }
+438: 
+439: static bool hook_sdk_configuration(void *obj) {
+440:     if (!obj) return false;
+441:     ID3D12SDKConfiguration1 *sdk = nullptr;
+442:     if (FAILED(((IUnknown *)obj)->QueryInterface(__uuidof(ID3D12SDKConfiguration1), (void **)&sdk)) || !sdk)
+443:         return false;
+444:     void *vtbl = *(void **)sdk;
+445:     bool ok = true;
+446:     if (vtbl != g_hooked_sdkconfig_vtbl) {
+447:         ok = patch_slot(sdk, RGPU_SLOT_SDKConfig1_CreateDeviceFactory,
+448:                         (void *)h_SDKCreateDeviceFactory, (void **)&o_SDKCreateDeviceFactory);
+449:         if (ok) {
+450:             g_hooked_sdkconfig_vtbl = vtbl;
+451:             InterlockedIncrement(&g_sdk_config_hooks);
+452:             rgpu_log("hooked ID3D12SDKConfiguration1::CreateDeviceFactory sdkconfig=%p vtbl=%p",
+453:                      (void *)sdk, vtbl);
+454:         }
+455:     }
+456:     sdk->Release();
+457:     return ok;
+458: }
+459: 
+460: /* ---------------- system d3d12.dll forwarding ----------------------------- */
+461: static HMODULE real_d3d12() {
+462:     if (!g_real) {
+463:         char path[MAX_PATH];
+464:         UINT n = GetSystemDirectoryA(path, MAX_PATH);
+465:         if (n && n < MAX_PATH - 16) { std::strcat(path, "\\d3d12.dll"); g_real = LoadLibraryA(path); }
+466:     }
+467:     return g_real;
+468: }
+469: static FARPROC real(const char *name) { HMODULE m = real_d3d12(); return m ? GetProcAddress(m, name) : nullptr; }
+470: 
+471: BOOL WINAPI DllMain(HINSTANCE, DWORD reason, LPVOID) {
+472:     if (reason == DLL_PROCESS_ATTACH) {
+473:         InitializeCriticalSection(&g_cs);
+474:         rgpu_bw_init(&g_bw, g_batch, sizeof(g_batch));
+475:         char exe[MAX_PATH] = {0}; GetModuleFileNameA(nullptr, exe, MAX_PATH);
+476:         rgpu_log("ATTACH host=\"%s\" (rgpu d3d12 proxy + command-stream tee)", exe);
+477:         rgpu_log("slots: ExecCmdLists=%u Draw=%u DrawIdx=%u Dispatch=%u Barrier=%u ClearRTV=%u OMSetRT=%u Copy=%u Close=%u FactoryCreateDevice=%u",
+478:                  RGPU_SLOT_Queue_ExecuteCommandLists, RGPU_SLOT_GCL_DrawInstanced, RGPU_SLOT_GCL_DrawIndexedInstanced,
+479:                  RGPU_SLOT_GCL_Dispatch, RGPU_SLOT_GCL_ResourceBarrier, RGPU_SLOT_GCL_ClearRenderTargetView,
+480:                  RGPU_SLOT_GCL_OMSetRenderTargets, RGPU_SLOT_GCL_CopyResource, RGPU_SLOT_GCL_Close, RGPU_SLOT_Factory_CreateDevice);

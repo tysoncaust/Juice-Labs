@@ -1,0 +1,199 @@
+{
+    "started_utc":  "2026-07-21T02:33:05.8696524Z",
+    "game_exe":  "C:\\Program Files\\Tokyo Xtreme Racer\\TokyoXtremeRacer\\Binaries\\Win64\\TokyoXtremeRacer-Win64-Shipping.exe",
+    "proxy_sha256":  "D3897AA2785C20F8C8F3F41522375C04E627D3B332CB6024E030AAE06B4CE5B7",
+    "duration_seconds":  90,
+    "launch_pid":  44296,
+    "observations":  [
+                         {
+                             "elapsed_seconds":  5,
+                             "process_count":  1,
+                             "pids":  [
+                                          44296
+                                      ],
+                             "working_set_mb":  605.4,
+                             "log_bytes":  2699
+                         },
+                         {
+                             "elapsed_seconds":  10,
+                             "process_count":  1,
+                             "pids":  [
+                                          44296
+                                      ],
+                             "working_set_mb":  3522.2,
+                             "log_bytes":  2699
+                         },
+                         {
+                             "elapsed_seconds":  15,
+                             "process_count":  1,
+                             "pids":  [
+                                          44296
+                                      ],
+                             "working_set_mb":  2884,
+                             "log_bytes":  2699
+                         },
+                         {
+                             "elapsed_seconds":  20,
+                             "process_count":  1,
+                             "pids":  [
+                                          44296
+                                      ],
+                             "working_set_mb":  2884.3,
+                             "log_bytes":  2699
+                         },
+                         {
+                             "elapsed_seconds":  25,
+                             "process_count":  1,
+                             "pids":  [
+                                          44296
+                                      ],
+                             "working_set_mb":  2657.8,
+                             "log_bytes":  2699
+                         },
+                         {
+                             "elapsed_seconds":  30,
+                             "process_count":  1,
+                             "pids":  [
+                                          44296
+                                      ],
+                             "working_set_mb":  2642.2,
+                             "log_bytes":  2699
+                         },
+                         {
+                             "elapsed_seconds":  35,
+                             "process_count":  1,
+                             "pids":  [
+                                          44296
+                                      ],
+                             "working_set_mb":  2640,
+                             "log_bytes":  2699
+                         },
+                         {
+                             "elapsed_seconds":  40,
+                             "process_count":  1,
+                             "pids":  [
+                                          44296
+                                      ],
+                             "working_set_mb":  2696.4,
+                             "log_bytes":  2699
+                         },
+                         {
+                             "elapsed_seconds":  45,
+                             "process_count":  1,
+                             "pids":  [
+                                          44296
+                                      ],
+                             "working_set_mb":  2646.2,
+                             "log_bytes":  2699
+                         },
+                         {
+                             "elapsed_seconds":  50,
+                             "process_count":  1,
+                             "pids":  [
+                                          44296
+                                      ],
+                             "working_set_mb":  2649.1,
+                             "log_bytes":  2699
+                         },
+                         {
+                             "elapsed_seconds":  55,
+                             "process_count":  1,
+                             "pids":  [
+                                          44296
+                                      ],
+                             "working_set_mb":  2644,
+                             "log_bytes":  2699
+                         },
+                         {
+                             "elapsed_seconds":  60,
+                             "process_count":  1,
+                             "pids":  [
+                                          44296
+                                      ],
+                             "working_set_mb":  2659.8,
+                             "log_bytes":  2699
+                         },
+                         {
+                             "elapsed_seconds":  65,
+                             "process_count":  1,
+                             "pids":  [
+                                          44296
+                                      ],
+                             "working_set_mb":  2638.8,
+                             "log_bytes":  2699
+                         },
+                         {
+                             "elapsed_seconds":  70,
+                             "process_count":  1,
+                             "pids":  [
+                                          44296
+                                      ],
+                             "working_set_mb":  2647.5,
+                             "log_bytes":  2699
+                         },
+                         {
+                             "elapsed_seconds":  75,
+                             "process_count":  1,
+                             "pids":  [
+                                          44296
+                                      ],
+                             "working_set_mb":  2654.1,
+                             "log_bytes":  2699
+                         },
+                         {
+                             "elapsed_seconds":  80,
+                             "process_count":  1,
+                             "pids":  [
+                                          44296
+                                      ],
+                             "working_set_mb":  2642.3,
+                             "log_bytes":  2699
+                         },
+                         {
+                             "elapsed_seconds":  85,
+                             "process_count":  1,
+                             "pids":  [
+                                          44296
+                                      ],
+                             "working_set_mb":  2621.8,
+                             "log_bytes":  2699
+                         },
+                         {
+                             "elapsed_seconds":  90,
+                             "process_count":  1,
+                             "pids":  [
+                                          44296
+                                      ],
+                             "working_set_mb":  2622.9,
+                             "log_bytes":  2699
+                         }
+                     ],
+    "log_markers":  {
+                        "attach":  1,
+                        "sdk_config_hook":  0,
+                        "sdk_create_factory_call":  0,
+                        "device_factory_hook":  0,
+                        "factory_create_device_call":  0,
+                        "armed_factory_device":  0,
+                        "check_feature_support":  0,
+                        "create_queue_base":  0,
+                        "create_queue_agility":  0,
+                        "create_list_base":  0,
+                        "create_list_agility":  0,
+                        "execute_command_lists":  0,
+                        "draw":  0,
+                        "dispatch":  0,
+                        "enhanced_barrier":  0,
+                        "execute_indirect":  0,
+                        "close":  0
+                    },
+    "attach_count":  1,
+    "device_create_count":  4,
+    "process_pid_count":  1,
+    "stable":  true,
+    "capture_reached_real_factory_path":  false,
+    "command_stream_live":  false,
+    "cleanup_ok":  true,
+    "error":  null,
+    "completed_utc":  "2026-07-21T02:34:47.5499474Z"
+}

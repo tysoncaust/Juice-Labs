@@ -1,0 +1,26 @@
+[12:26:29.363] ATTACH host="C:\Program Files\Tokyo Xtreme Racer\TokyoXtremeRacer\Binaries\Win64\TokyoXtremeRacer-Win64-Shipping.exe" (rgpu d3d12 proxy + command-stream tee)
+[12:26:29.364] slots: ExecCmdLists=10 Draw=12 DrawIdx=13 Dispatch=14 Barrier=26 ClearRTV=48 OMSetRT=46 Copy=17 Close=9 FactoryCreateDevice=9
+[12:26:31.153] D3D12CreateDevice riid={77ACCE80-638E-4E65-...} fl=0x1000 adapter=hardware -> hr=0x00000000 device=0000025235812510 vtbl=00007ff88ddefb58
+[12:26:31.154] armed D3D12CreateDevice device input=0000025235812510 base=0000025235812510/vtbl=00007ff88ddefb58 d4=0000025235812510/vtbl=00007ff88ddefb58 d9=0000025235812510/vtbl=00007ff88ddefb58: CFS=1 CCQ=1 CCL=1 CCQ1=1 CCL1=1
+[12:26:31.187] D3D12CreateDevice riid={77ACCE80-638E-4E65-...} fl=0x1000 adapter=hardware -> hr=0x00000000 device=00000252356c7820 vtbl=00007ff88ddefb58
+[12:26:31.188] armed D3D12CreateDevice device input=00000252356c7820 base=00000252356c7820/vtbl=00007ff88ddefb58 d4=00000252356c7820/vtbl=00007ff88ddefb58 d9=00000252356c7820/vtbl=00007ff88ddefb58: CFS=0 CCQ=0 CCL=0 CCQ1=0 CCL1=0
+[12:26:31.216] D3D12CreateDevice riid={77ACCE80-638E-4E65-...} fl=0x1000 adapter=hardware -> hr=0x00000000 device=00000252359b6580 vtbl=00007ff88ddefb58
+[12:26:31.217] armed D3D12CreateDevice device input=00000252359b6580 base=00000252359b6580/vtbl=00007ff88ddefb58 d4=00000252359b6580/vtbl=00007ff88ddefb58 d9=00000252359b6580/vtbl=00007ff88ddefb58: CFS=0 CCQ=0 CCL=0 CCQ1=0 CCL1=0
+[12:26:31.244] D3D12CreateDevice riid={77ACCE80-638E-4E65-...} fl=0x1000 adapter=hardware -> hr=0x00000000 device=0000025235925c50 vtbl=00007ff88ddefb58
+[12:26:31.244] armed D3D12CreateDevice device input=0000025235925c50 base=0000025235925c50/vtbl=00007ff88ddefb58 d4=0000025235925c50/vtbl=00007ff88ddefb58 d9=0000025235925c50/vtbl=00007ff88ddefb58: CFS=0 CCQ=0 CCL=0 CCQ1=0 CCL1=0
+[12:30:15.107] ATTACH host="C:\Users\email\Documents\GitHub\Juice-Labs\rgpu\proxy-d3d12\test\rgpu_d3d12_harness.exe" (rgpu d3d12 proxy + command-stream tee)
+[12:30:15.107] slots: ExecCmdLists=10 Draw=12 DrawIdx=13 Dispatch=14 Barrier=26 ClearRTV=48 OMSetRT=46 Copy=17 Close=9 FactoryCreateDevice=9
+[12:30:15.108] hooked ID3D12SDKConfiguration1::CreateDeviceFactory sdkconfig=0000017d82b17730 vtbl=00007ff8cfaa6338
+[12:30:15.111] ID3D12SDKConfiguration1::CreateDeviceFactory sdk=0 path="" -> hr=0x00000000 factory=0000017d82b22958
+[12:30:15.111] hooked ID3D12DeviceFactory::CreateDevice factory=0000017d82b22958 vtbl=00007ff88ddfa928
+[12:30:15.170] D3D12CreateDevice riid={189819F1-1DB6-4B57-...} fl=0xB000 adapter=hardware -> hr=0x00000000 device=0000017d82b523e0 vtbl=00007ff88ddefb58
+[12:30:15.225] inline-hooked Device::CheckFeatureSupport @ 00007ff88dbc7da0
+[12:30:15.226] inline-hook ABORTED for Device::CreateCommandQueue @ 00007ff88dc10380
+[12:30:15.226] inline-hook ABORTED for Device::CreateCommandList @ 00007ff88dbf8660
+[12:30:15.226] inline-hooked Device4::CreateCommandList1 @ 00007ff88dc6ab60
+[12:30:15.227] inline-hooked Device9::CreateCommandQueue1 @ 00007ff88dc103b0
+[12:30:15.227] armed-inline D3D12CreateDevice device input=0000017d82b523e0 base=0000017d82b523e0/vtbl=00007ff88ddefb58 d4=0000017d82b523e0/vtbl=00007ff88ddefb58 d9=0000017d82b523e0/vtbl=00007ff88ddefb58 originals CFS=00007ff88db90000 CCQ=0000000000000000 CCL=0000000000000000 CCQ1=00007ff88db70000 CCL1=00007ff88db80000
+[12:30:15.227] game called CreateCommandQueue1 (Agility)
+[12:30:15.303] inline-hooked ExecuteCommandLists @ 00007ff88dbb3390
+[12:30:15.304] game USES our hooked device (CheckFeatureSupport fired) -> device object is right
+[12:30:15.306] submit#1 lists=1 | tee draws=0 dispatch=0 barriers=0 clears=0 setRT=0 copies=0 | batch=16 bytes

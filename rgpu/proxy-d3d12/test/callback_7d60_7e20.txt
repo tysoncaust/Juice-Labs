@@ -1,0 +1,78 @@
+﻿
+C:\Windows\System32\d3d12.dll:     file format pei-x86-64
+
+
+Disassembly of section .text:
+
+0000000180007d60 <.text+0x6d60>:
+   180007d60:	07                   	(bad)
+   180007d61:	48 83 c4 20          	add    $0x20,%rsp
+   180007d65:	5b                   	pop    %rbx
+   180007d66:	c3                   	ret
+   180007d67:	cc                   	int3
+   180007d68:	48 8b 53 10          	mov    0x10(%rbx),%rdx
+   180007d6c:	48 2b d1             	sub    %rcx,%rdx
+   180007d6f:	48 83 e2 fc          	and    $0xfffffffffffffffc,%rdx
+   180007d73:	e8 84 e1 ff ff       	call   0x180005efc
+   180007d78:	48 83 23 00          	andq   $0x0,(%rbx)
+   180007d7c:	48 83 63 08 00       	andq   $0x0,0x8(%rbx)
+   180007d81:	48 83 63 10 00       	andq   $0x0,0x10(%rbx)
+   180007d86:	eb d9                	jmp    0x180007d61
+   180007d88:	cc                   	int3
+   180007d89:	cc                   	int3
+   180007d8a:	cc                   	int3
+   180007d8b:	cc                   	int3
+   180007d8c:	cc                   	int3
+   180007d8d:	cc                   	int3
+   180007d8e:	cc                   	int3
+   180007d8f:	cc                   	int3
+   180007d90:	80 39 00             	cmpb   $0x0,(%rcx)
+   180007d93:	75 02                	jne    0x180007d97
+   180007d95:	c3                   	ret
+   180007d96:	cc                   	int3
+   180007d97:	48 8d 51 20          	lea    0x20(%rcx),%rdx
+   180007d9b:	48 83 c1 48          	add    $0x48,%rcx
+   180007d9f:	e9 44 e3 ff ff       	jmp    0x1800060e8
+   180007da4:	cc                   	int3
+   180007da5:	cc                   	int3
+   180007da6:	cc                   	int3
+   180007da7:	cc                   	int3
+   180007da8:	cc                   	int3
+   180007da9:	cc                   	int3
+   180007daa:	cc                   	int3
+   180007dab:	cc                   	int3
+   180007dac:	cc                   	int3
+   180007dad:	cc                   	int3
+   180007dae:	cc                   	int3
+   180007daf:	cc                   	int3
+   180007db0:	48 89 5c 24 10       	mov    %rbx,0x10(%rsp)
+   180007db5:	48 89 74 24 18       	mov    %rsi,0x18(%rsp)
+   180007dba:	57                   	push   %rdi
+   180007dbb:	48 83 ec 30          	sub    $0x30,%rsp
+   180007dbf:	49 8b f9             	mov    %r9,%rdi
+   180007dc2:	49 8b f0             	mov    %r8,%rsi
+   180007dc5:	48 8b c2             	mov    %rdx,%rax
+   180007dc8:	48 8b 99 80 00 00 00 	mov    0x80(%rcx),%rbx
+   180007dcf:	48 85 db             	test   %rbx,%rbx
+   180007dd2:	74 2f                	je     0x180007e03
+   180007dd4:	4c 8b 8b 90 00 00 00 	mov    0x90(%rbx),%r9
+   180007ddb:	4d 85 c9             	test   %r9,%r9
+   180007dde:	74 2a                	je     0x180007e0a
+   180007de0:	48 8b ca             	mov    %rdx,%rcx
+   180007de3:	49 8b c1             	mov    %r9,%rax
+   180007de6:	4c 8b c7             	mov    %rdi,%r8
+   180007de9:	48 8b d6             	mov    %rsi,%rdx
+   180007dec:	e8 1f d2 00 00       	call   0x180015010
+   180007df1:	90                   	nop
+   180007df2:	48 8b 5c 24 48       	mov    0x48(%rsp),%rbx
+   180007df7:	48 8b 74 24 50       	mov    0x50(%rsp),%rsi
+   180007dfc:	48 83 c4 30          	add    $0x30,%rsp
+   180007e00:	5f                   	pop    %rdi
+   180007e01:	c3                   	ret
+   180007e02:	cc                   	int3
+   180007e03:	b8 03 00 7e 88       	mov    $0x887e0003,%eax
+   180007e08:	eb e8                	jmp    0x180007df2
+   180007e0a:	48 89 44 24 40       	mov    %rax,0x40(%rsp)
+   180007e0f:	4c 8d 44 24 40       	lea    0x40(%rsp),%r8
+   180007e14:	48 8d 54 24 20       	lea    0x20(%rsp),%rdx
+   180007e19:	48 8d 8b b0 00 00 00 	lea    0xb0(%rbx),%rcx

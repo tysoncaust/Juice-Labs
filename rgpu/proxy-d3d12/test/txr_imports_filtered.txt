@@ -1,0 +1,70 @@
+﻿	DLL Name: dxgi.dll
+	077b44d0  <none>  0004  CreateDXGIFactory1
+	077b44d8  <none>  0003  CreateDXGIFactory
+	DLL Name: DSOUND.dll
+	DLL Name: api-ms-win-core-synch-l1-2-0.dll
+	DLL Name: WS2_32.dll
+	DLL Name: WINMM.dll
+	DLL Name: KERNEL32.dll
+	DLL Name: USER32.dll
+	DLL Name: GDI32.dll
+	DLL Name: ADVAPI32.dll
+	DLL Name: SHELL32.dll
+	DLL Name: ole32.dll
+	DLL Name: OLEAUT32.dll
+	DLL Name: IPHLPAPI.DLL
+	DLL Name: SETUPAPI.dll
+	DLL Name: dwmapi.dll
+	DLL Name: IMM32.dll
+	DLL Name: UIAutomationCore.DLL
+	DLL Name: CRYPT32.dll
+	DLL Name: WINHTTP.dll
+	DLL Name: OPENGL32.dll
+	DLL Name: VERSION.dll
+	DLL Name: ntdll.dll
+	DLL Name: MSVCP140.dll
+	DLL Name: bcrypt.dll
+	DLL Name: UxTheme.dll
+	DLL Name: WINTRUST.dll
+	DLL Name: imagehlp.dll
+	DLL Name: VCRUNTIME140.dll
+	DLL Name: VCRUNTIME140_1.dll
+	DLL Name: api-ms-win-crt-heap-l1-1-0.dll
+	DLL Name: api-ms-win-crt-convert-l1-1-0.dll
+	DLL Name: api-ms-win-crt-math-l1-1-0.dll
+	DLL Name: api-ms-win-crt-string-l1-1-0.dll
+	DLL Name: api-ms-win-crt-stdio-l1-1-0.dll
+	DLL Name: api-ms-win-crt-utility-l1-1-0.dll
+	DLL Name: api-ms-win-crt-runtime-l1-1-0.dll
+	DLL Name: api-ms-win-crt-locale-l1-1-0.dll
+	DLL Name: api-ms-win-crt-environment-l1-1-0.dll
+	DLL Name: api-ms-win-crt-conio-l1-1-0.dll
+	DLL Name: api-ms-win-crt-filesystem-l1-1-0.dll
+	DLL Name: api-ms-win-crt-time-l1-1-0.dll
+	DLL Name: api-ms-win-crt-multibyte-l1-1-0.dll
+	[   2] +base[   3]  0002 D3D12SDKPath
+	[   3] +base[   4]  0003 D3D12SDKVersion
+	[  24] +base[  25]  0018 INTC_D3D12_GetApplicationInfo
+	[  25] +base[  26]  0019 INTC_D3D12_GetGpuCrashDumpBufferInfo
+	[  26] +base[  27]  001a INTC_D3D12_GpuCrashDumpOnCommandListCreate
+	[  27] +base[  28]  001b INTC_D3D12_GpuCrashDumpOnCommandListDestroy
+	[  28] +base[  29]  001c INTC_D3D12_GpuCrashDumpOnDeviceDestroy
+	[  29] +base[  30]  001d INTC_D3D12_RegisterDriverCallbacks
+	[  42] +base[  43]  002a NVSDK_NGX_D3D12_AllocateParameters
+	[  43] +base[  44]  002b NVSDK_NGX_D3D12_CreateFeature
+	[  44] +base[  45]  002c NVSDK_NGX_D3D12_DestroyParameters
+	[  45] +base[  46]  002d NVSDK_NGX_D3D12_EvaluateFeature
+	[  46] +base[  47]  002e NVSDK_NGX_D3D12_EvaluateFeature_C
+	[  47] +base[  48]  002f NVSDK_NGX_D3D12_GetCapabilityParameters
+	[  48] +base[  49]  0030 NVSDK_NGX_D3D12_GetFeatureRequirements
+	[  49] +base[  50]  0031 NVSDK_NGX_D3D12_GetParameters
+	[  50] +base[  51]  0032 NVSDK_NGX_D3D12_GetScratchBufferSize
+	[  51] +base[  52]  0033 NVSDK_NGX_D3D12_ReleaseFeature
+	[  52] +base[  53]  0034 NVSDK_NGX_D3D12_Shutdown
+	[  53] +base[  54]  0035 NVSDK_NGX_D3D12_Shutdown1
+	[  56] +base[  57]  0038 NVSDK_NGX_Parameter_GetD3d12Resource
+	[  64] +base[  65]  0040 NVSDK_NGX_Parameter_SetD3d12Resource
+	[  92] +base[  93]  005c agsDriverExtensionsDX11_CreateDevice
+	[ 110] +base[ 111]  006e agsDriverExtensionsDX12_CreateDevice
+	reloc   36 offset  120 [8d3d120] DIR64
+	reloc   37 offset  128 [8d3d128] DIR64

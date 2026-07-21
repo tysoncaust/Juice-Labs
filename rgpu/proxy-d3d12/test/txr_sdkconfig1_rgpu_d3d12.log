@@ -1,0 +1,15 @@
+[12:33:09.795] ATTACH host="C:\Program Files\Tokyo Xtreme Racer\TokyoXtremeRacer\Binaries\Win64\TokyoXtremeRacer-Win64-Shipping.exe" (rgpu d3d12 proxy + command-stream tee)
+[12:33:09.795] slots: ExecCmdLists=10 Draw=12 DrawIdx=13 Dispatch=14 Barrier=26 ClearRTV=48 OMSetRT=46 Copy=17 Close=9 FactoryCreateDevice=9
+[12:33:11.880] D3D12CreateDevice riid={77ACCE80-638E-4E65-...} fl=0x1000 adapter=hardware -> hr=0x00000000 device=00000190eb3f5aa0 vtbl=00007ff88ddefb58
+[12:33:11.944] inline-hooked Device::CheckFeatureSupport @ 00007ff88dbc7da0
+[12:33:11.944] inline-hook ABORTED for Device::CreateCommandQueue @ 00007ff88dc10380
+[12:33:11.945] inline-hook ABORTED for Device::CreateCommandList @ 00007ff88dbf8660
+[12:33:11.945] inline-hooked Device4::CreateCommandList1 @ 00007ff88dc6ab60
+[12:33:11.945] inline-hooked Device9::CreateCommandQueue1 @ 00007ff88dc103b0
+[12:33:11.945] armed-hybrid D3D12CreateDevice device input=00000190eb3f5aa0 base=00000190eb3f5aa0/vtbl=00007ff88ddefb58 d4=00000190eb3f5aa0/vtbl=00007ff88ddefb58 d9=00000190eb3f5aa0/vtbl=00007ff88ddefb58 originals CFS=00007ff88db90000 CCQ=00007ff88dc10380 CCL=00007ff88dbf8660 CCQ1=00007ff88db70000 CCL1=00007ff88db80000 fallback=0/1/1/0/0
+[12:33:11.983] D3D12CreateDevice riid={77ACCE80-638E-4E65-...} fl=0x1000 adapter=hardware -> hr=0x00000000 device=00000190eb563b60 vtbl=00007ff88ddefb58
+[12:33:11.984] armed-hybrid D3D12CreateDevice device input=00000190eb563b60 base=00000190eb563b60/vtbl=00007ff88ddefb58 d4=00000190eb563b60/vtbl=00007ff88ddefb58 d9=00000190eb563b60/vtbl=00007ff88ddefb58 originals CFS=00007ff88db90000 CCQ=00007ff88dc10380 CCL=00007ff88dbf8660 CCQ1=00007ff88db70000 CCL1=00007ff88db80000 fallback=0/0/0/0/0
+[12:33:12.022] D3D12CreateDevice riid={77ACCE80-638E-4E65-...} fl=0x1000 adapter=hardware -> hr=0x00000000 device=00000190eb563b60 vtbl=00007ff88ddefb58
+[12:33:12.022] armed-hybrid D3D12CreateDevice device input=00000190eb563b60 base=00000190eb563b60/vtbl=00007ff88ddefb58 d4=00000190eb563b60/vtbl=00007ff88ddefb58 d9=00000190eb563b60/vtbl=00007ff88ddefb58 originals CFS=00007ff88db90000 CCQ=00007ff88dc10380 CCL=00007ff88dbf8660 CCQ1=00007ff88db70000 CCL1=00007ff88db80000 fallback=0/0/0/0/0
+[12:33:12.050] D3D12CreateDevice riid={77ACCE80-638E-4E65-...} fl=0x1000 adapter=hardware -> hr=0x00000000 device=00000190eb50e5e0 vtbl=00007ff88ddefb58
+[12:33:12.050] armed-hybrid D3D12CreateDevice device input=00000190eb50e5e0 base=00000190eb50e5e0/vtbl=00007ff88ddefb58 d4=00000190eb50e5e0/vtbl=00007ff88ddefb58 d9=00000190eb50e5e0/vtbl=00007ff88ddefb58 originals CFS=00007ff88db90000 CCQ=00007ff88dc10380 CCL=00007ff88dbf8660 CCQ1=00007ff88db70000 CCL1=00007ff88db80000 fallback=0/0/0/0/0

@@ -1,0 +1,72 @@
+﻿
+C:\Windows\System32\d3d12.dll:     file format pei-x86-64
+
+
+Disassembly of section .text:
+
+0000000180007ed0 <.text+0x6ed0>:
+   180007ed0:	f1                   	int1
+   180007ed1:	74 11                	je     0x180007ee4
+   180007ed3:	48 8b 5c 24 30       	mov    0x30(%rsp),%rbx
+   180007ed8:	48 8b 74 24 38       	mov    0x38(%rsp),%rsi
+   180007edd:	48 83 c4 20          	add    $0x20,%rsp
+   180007ee1:	5f                   	pop    %rdi
+   180007ee2:	c3                   	ret
+   180007ee3:	cc                   	int3
+   180007ee4:	4c 8b 43 10          	mov    0x10(%rbx),%r8
+   180007ee8:	48 8b d7             	mov    %rdi,%rdx
+   180007eeb:	48 8b ce             	mov    %rsi,%rcx
+   180007eee:	e8 c1 ff ff ff       	call   0x180007eb4
+   180007ef3:	48 8b cb             	mov    %rbx,%rcx
+   180007ef6:	ba 30 00 00 00       	mov    $0x30,%edx
+   180007efb:	48 8b 1b             	mov    (%rbx),%rbx
+   180007efe:	e8 f9 df ff ff       	call   0x180005efc
+   180007f03:	80 7b 19 00          	cmpb   $0x0,0x19(%rbx)
+   180007f07:	74 db                	je     0x180007ee4
+   180007f09:	eb c8                	jmp    0x180007ed3
+   180007f0b:	cc                   	int3
+   180007f0c:	cc                   	int3
+   180007f0d:	cc                   	int3
+   180007f0e:	cc                   	int3
+   180007f0f:	cc                   	int3
+   180007f10:	cc                   	int3
+   180007f11:	cc                   	int3
+   180007f12:	cc                   	int3
+   180007f13:	cc                   	int3
+   180007f14:	cc                   	int3
+   180007f15:	cc                   	int3
+   180007f16:	cc                   	int3
+   180007f17:	cc                   	int3
+   180007f18:	cc                   	int3
+   180007f19:	cc                   	int3
+   180007f1a:	cc                   	int3
+   180007f1b:	cc                   	int3
+   180007f1c:	cc                   	int3
+   180007f1d:	cc                   	int3
+   180007f1e:	cc                   	int3
+   180007f1f:	cc                   	int3
+   180007f20:	48 8b c4             	mov    %rsp,%rax
+   180007f23:	48 89 58 08          	mov    %rbx,0x8(%rax)
+   180007f27:	48 89 68 10          	mov    %rbp,0x10(%rax)
+   180007f2b:	48 89 70 18          	mov    %rsi,0x18(%rax)
+   180007f2f:	57                   	push   %rdi
+   180007f30:	48 83 ec 50          	sub    $0x50,%rsp
+   180007f34:	49 8b d9             	mov    %r9,%rbx
+   180007f37:	49 8b f8             	mov    %r8,%rdi
+   180007f3a:	8b f2                	mov    %edx,%esi
+   180007f3c:	48 8b e9             	mov    %rcx,%rbp
+   180007f3f:	48 8d 0d a2 6d 01 00 	lea    0x16da2(%rip),%rcx        # 0x18001ece8
+   180007f46:	48 89 48 e8          	mov    %rcx,-0x18(%rax)
+   180007f4a:	c6 40 f0 01          	movb   $0x1,-0x10(%rax)
+   180007f4e:	e8 c1 2c 00 00       	call   0x18000ac14
+   180007f53:	90                   	nop
+   180007f54:	48 8d 54 24 40       	lea    0x40(%rsp),%rdx
+   180007f59:	48 8d 0d 80 6d 01 00 	lea    0x16d80(%rip),%rcx        # 0x18001ece0
+   180007f60:	e8 af 81 00 00       	call   0x180010114
+   180007f65:	8b 15 55 6f 01 00    	mov    0x16f55(%rip),%edx        # 0x18001eec0
+   180007f6b:	65 48 8b 0c 25 58 00 	mov    %gs:0x58,%rcx
+   180007f72:	00 00 
+   180007f74:	41 b9 08 00 00 00    	mov    $0x8,%r9d
+   180007f7a:	48 8b 14 d1          	mov    (%rcx,%rdx,8),%rdx
+   180007f7e:	48                   	rex.W
+   180007f7f:	8b                   	.byte 0x8b

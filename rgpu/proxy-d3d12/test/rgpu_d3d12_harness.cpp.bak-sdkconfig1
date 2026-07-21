@@ -9,34 +9,15 @@
 #include <cstdio>
 
 typedef HRESULT (WINAPI *pCreate)(IUnknown *, D3D_FEATURE_LEVEL, REFIID, void **);
-typedef HRESULT (WINAPI *pGetInterface)(REFCLSID, REFIID, void **);
 typedef void    (WINAPI *pStats)(long *, long *, long *, long *, long *, long *, long *, unsigned *);
-typedef void    (WINAPI *pPathStats)(long *, long *, long *);
 
 int main() {
     std::printf("rgpu d3d12 command-stream tee harness\n-------------------------------------\n");
     HMODULE dll = LoadLibraryA("rgpu_d3d12.dll");
     if (!dll) { std::printf("  FAIL: load rgpu_d3d12.dll (err %lu)\n", GetLastError()); return 1; }
-    pCreate       CreateDevice = (pCreate)GetProcAddress(dll, "D3D12CreateDevice");
-    pGetInterface GetInterface = (pGetInterface)GetProcAddress(dll, "D3D12GetInterface");
-    pStats        Stats        = (pStats)GetProcAddress(dll, "rgpu_d3d12_stats");
-    pPathStats    PathStats    = (pPathStats)GetProcAddress(dll, "rgpu_d3d12_path_stats");
-    if (!CreateDevice || !GetInterface || !Stats || !PathStats) { std::printf("  FAIL: proxy missing exports\n"); return 1; }
-
-    /* Exercise the documented Agility discovery route. The deliberately invalid
-     * factory request can fail; the SDKConfiguration1 detour must still fire. */
-    ID3D12SDKConfiguration1 *sdkConfig = nullptr;
-    HRESULT sdkHr = GetInterface(CLSID_D3D12SDKConfiguration, __uuidof(ID3D12SDKConfiguration1), (void **)&sdkConfig);
-    if (SUCCEEDED(sdkHr) && sdkConfig) {
-        ID3D12DeviceFactory *probeFactory = nullptr;
-        HRESULT factoryHr = sdkConfig->CreateDeviceFactory(0, "", __uuidof(ID3D12DeviceFactory), (void **)&probeFactory);
-        std::printf("  SDKConfiguration1 path exercised: CreateDeviceFactory returned 0x%08lX\n", (unsigned long)factoryHr);
-        if (probeFactory) probeFactory->Release();
-        sdkConfig->Release();
-    } else {
-        std::printf("  FAIL: D3D12GetInterface SDKConfiguration1 0x%08lX\n", (unsigned long)sdkHr);
-        return 1;
-    }
+    pCreate CreateDevice = (pCreate)GetProcAddress(dll, "D3D12CreateDevice");
+    pStats  Stats        = (pStats)GetProcAddress(dll, "rgpu_d3d12_stats");
+    if (!CreateDevice || !Stats) { std::printf("  FAIL: proxy missing exports\n"); return 1; }
 
     ID3D12Device *dev = nullptr;
     HRESULT hr = CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0, __uuidof(ID3D12Device), (void **)&dev);
@@ -92,15 +73,10 @@ int main() {
 
     long execs=0, lists_n=0, draws=0, dispatch=0, barriers=0, clears=0, copies=0; unsigned bytes=0;
     Stats(&execs, &lists_n, &draws, &dispatch, &barriers, &clears, &copies, &bytes);
-    long sdkHooks=0, sdkFactoryCalls=0, factoryDeviceCalls=0;
-    PathStats(&sdkHooks, &sdkFactoryCalls, &factoryDeviceCalls);
     std::printf("  tee stats: execs=%ld lists=%ld draws=%ld barriers=%ld clears=%ld copies=%ld | batch=%u bytes\n",
                 execs, lists_n, draws, barriers, clears, copies, bytes);
-    std::printf("  agility path: sdk-hooks=%ld create-factory-calls=%ld factory-device-calls=%ld\n",
-                sdkHooks, sdkFactoryCalls, factoryDeviceCalls);
 
-    int ok = execs >= 1 && barriers >= 1 && clears >= 1 && draws >= 1 && bytes > 0 &&
-             sdkHooks >= 1 && sdkFactoryCalls >= 1;
+    int ok = execs >= 1 && barriers >= 1 && clears >= 1 && draws >= 1 && bytes > 0;
     std::printf("-------------------------------------\n");
     std::printf(ok ? "RESULT: D3D12 command stream captured (ExecuteCommandLists + barrier + clear + draw tee'd)\n"
                    : "RESULT: FAIL\n");

@@ -310,62 +310,22 @@ static HRESULT STDMETHODCALLTYPE h_DevCCQ1(ID3D12Device9 *T, const D3D12_COMMAND
 static HRESULT STDMETHODCALLTYPE h_DevCCL(ID3D12Device *T, UINT nm, D3D12_COMMAND_LIST_TYPE ty, ID3D12CommandAllocator *a, ID3D12PipelineState *ps, REFIID r, void **pp){ once_log(&l_ccl,"game called CreateCommandList (base)"); HRESULT hr=o_DevCCL(T,nm,ty,a,ps,r,pp); if(SUCCEEDED(hr)&&pp)arm_list_from_any(*pp); return hr; }
 static HRESULT STDMETHODCALLTYPE h_DevCCL1(ID3D12Device4 *T, UINT nm, D3D12_COMMAND_LIST_TYPE ty, D3D12_COMMAND_LIST_FLAGS f, REFIID r, void **pp){ once_log(&l_ccl1,"game called CreateCommandList1 (Agility)"); HRESULT hr=o_DevCCL1(T,nm,ty,f,r,pp); if(SUCCEEDED(hr)&&pp)arm_list_from_any(*pp); return hr; }
 
-/* Inline-hook device methods from the real returned interface. This survives
- * UE4SS/overlay vtable replacement just like the queue/list inline hooks. */
+static void *g_hooked_dev_vtbl = nullptr;
 static void arm_from_device(ID3D12Device *dev, const char *which) {
-    if (!dev) return;
-
-    ID3D12Device *base = nullptr;
-    ID3D12Device4 *d4 = nullptr;
+    void *dv = *(void **)dev;
+    if (dv == g_hooked_dev_vtbl) return;               /* device vtable already hooked */
+    g_hooked_dev_vtbl = dv;
+    patch_slot(dev, RGPU_SLOT_Device_CheckFeatureSupport, (void *)h_CFS, (void **)&o_CFS);
+    bool pq = patch_slot(dev, RGPU_SLOT_Device_CreateCommandQueue, (void *)h_DevCCQ, (void **)&o_DevCCQ);
+    bool pl = patch_slot(dev, RGPU_SLOT_Device_CreateCommandList,  (void *)h_DevCCL, (void **)&o_DevCCL);
+    bool pq1 = false, pl1 = false;
     ID3D12Device9 *d9 = nullptr;
-    dev->QueryInterface(__uuidof(ID3D12Device), (void **)&base);
-    dev->QueryInterface(__uuidof(ID3D12Device4), (void **)&d4);
-    dev->QueryInterface(__uuidof(ID3D12Device9), (void **)&d9);
-
-    void *bv = base ? *(void **)base : nullptr;
-    void *v4 = d4 ? *(void **)d4 : nullptr;
-    void *v9 = d9 ? *(void **)d9 : nullptr;
-
-    HookItem items[5]; int n = 0;
-    auto add = [&](void *obj, unsigned slot, void *detour, void **orig, const char *name) {
-        if (obj && !*orig && n < 5) items[n++] = { vslot(obj, slot), detour, orig, name };
-    };
-    add(base, RGPU_SLOT_Device_CheckFeatureSupport, (void *)h_CFS, (void **)&o_CFS,
-        "Device::CheckFeatureSupport");
-    add(base, RGPU_SLOT_Device_CreateCommandQueue, (void *)h_DevCCQ, (void **)&o_DevCCQ,
-        "Device::CreateCommandQueue");
-    add(base, RGPU_SLOT_Device_CreateCommandList, (void *)h_DevCCL, (void **)&o_DevCCL,
-        "Device::CreateCommandList");
-    add(d4, RGPU_SLOT_Device4_CreateCommandList1, (void *)h_DevCCL1, (void **)&o_DevCCL1,
-        "Device4::CreateCommandList1");
-    add(d9, RGPU_SLOT_Device9_CreateCommandQueue1, (void *)h_DevCCQ1, (void **)&o_DevCCQ1,
-        "Device9::CreateCommandQueue1");
-    install_batch_frozen(items, n);
-
-    /* The conservative inline decoder can reject some base-method prologues.
-     * Keep a safe vtable fallback for those exact methods; the Agility 1 methods
-     * remain inline-hooked and therefore survive later overlay vtable changes. */
-    bool fbCFS = false, fbCCQ = false, fbCCL = false, fbCCQ1 = false, fbCCL1 = false;
-    if (base && !o_CFS) fbCFS = patch_slot(base, RGPU_SLOT_Device_CheckFeatureSupport,
-                                            (void *)h_CFS, (void **)&o_CFS);
-    if (base && !o_DevCCQ) fbCCQ = patch_slot(base, RGPU_SLOT_Device_CreateCommandQueue,
-                                              (void *)h_DevCCQ, (void **)&o_DevCCQ);
-    if (base && !o_DevCCL) fbCCL = patch_slot(base, RGPU_SLOT_Device_CreateCommandList,
-                                              (void *)h_DevCCL, (void **)&o_DevCCL);
-    if (d9 && !o_DevCCQ1) fbCCQ1 = patch_slot(d9, RGPU_SLOT_Device9_CreateCommandQueue1,
-                                               (void *)h_DevCCQ1, (void **)&o_DevCCQ1);
-    if (d4 && !o_DevCCL1) fbCCL1 = patch_slot(d4, RGPU_SLOT_Device4_CreateCommandList1,
-                                               (void *)h_DevCCL1, (void **)&o_DevCCL1);
-
-    rgpu_log("armed-hybrid %s device input=%p base=%p/vtbl=%p d4=%p/vtbl=%p d9=%p/vtbl=%p originals CFS=%p CCQ=%p CCL=%p CCQ1=%p CCL1=%p fallback=%d/%d/%d/%d/%d",
-             which, (void *)dev, (void *)base, bv, (void *)d4, v4, (void *)d9, v9,
-             (void *)o_CFS, (void *)o_DevCCQ, (void *)o_DevCCL,
-             (void *)o_DevCCQ1, (void *)o_DevCCL1,
-             fbCFS, fbCCQ, fbCCL, fbCCQ1, fbCCL1);
-
-    if (d9) d9->Release();
-    if (d4) d4->Release();
-    if (base) base->Release();
+    if (SUCCEEDED(dev->QueryInterface(__uuidof(ID3D12Device9), (void **)&d9)) && d9) { pq1 = patch_slot(dev, RGPU_SLOT_Device9_CreateCommandQueue1, (void *)h_DevCCQ1, (void **)&o_DevCCQ1); d9->Release(); }
+    ID3D12Device4 *d4 = nullptr;
+    if (SUCCEEDED(dev->QueryInterface(__uuidof(ID3D12Device4), (void **)&d4)) && d4) { pl1 = patch_slot(dev, RGPU_SLOT_Device4_CreateCommandList1, (void *)h_DevCCL1, (void **)&o_DevCCL1); d4->Release(); }
+    rgpu_log("armed %s device dev=%p vtbl=%p: patch CCQ=%d CCL=%d CCQ1=%d CCL1=%d (slots %u/%u/%u/%u)", which, (void*)dev, dv,
+             pq, pl, pq1, pl1, RGPU_SLOT_Device_CreateCommandQueue, RGPU_SLOT_Device_CreateCommandList,
+             RGPU_SLOT_Device9_CreateCommandQueue1, RGPU_SLOT_Device4_CreateCommandList1);
 }
 
 static bool adapter_is_warp(IUnknown *adapter) {
@@ -457,12 +417,6 @@ static bool hook_sdk_configuration(void *obj) {
     return ok;
 }
 
-extern "C" __declspec(dllexport) void WINAPI rgpu_d3d12_arm_external_device(ID3D12Device *dev, const char *source) {
-    rgpu_log("external device arm source=%s device=%p vtbl=%p",
-             source ? source : "unknown", (void *)dev, dev ? *(void **)dev : nullptr);
-    arm_from_device(dev, source ? source : "external");
-}
-
 /* ---------------- system d3d12.dll forwarding ----------------------------- */
 static HMODULE real_d3d12() {
     if (!g_real) {
@@ -498,10 +452,8 @@ __declspec(dllexport) HRESULT WINAPI D3D12CreateDevice(IUnknown *pAdapter, D3D_F
     if (!fn) { rgpu_log("D3D12CreateDevice: real d3d12.dll MISSING"); return E_FAIL; }
     HRESULT hr = fn(pAdapter, fl, riid, ppDevice);
     bool warp = adapter_is_warp(pAdapter);
-    rgpu_log("D3D12CreateDevice riid={%08lX-%04X-%04X-...} fl=0x%X adapter=%s -> hr=0x%08lX device=%p vtbl=%p",
-             (unsigned long)riid.Data1, (unsigned)riid.Data2, (unsigned)riid.Data3, (unsigned)fl,
-             warp ? "WARP" : "hardware", (unsigned long)hr, ppDevice ? *ppDevice : nullptr,
-             (ppDevice && *ppDevice) ? *(void **)*ppDevice : nullptr);
+    rgpu_log("D3D12CreateDevice fl=0x%X adapter=%s -> hr=0x%08lX device=%p", (unsigned)fl,
+             warp ? "WARP" : "hardware", (unsigned long)hr, ppDevice ? *ppDevice : nullptr);
     if (SUCCEEDED(hr) && ppDevice && *ppDevice && !warp) arm_from_device((ID3D12Device *)*ppDevice, "D3D12CreateDevice");
     return hr;
 }

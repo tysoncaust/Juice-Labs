@@ -29,5 +29,4 @@ unsigned RGPU_SLOT_GCL_ExecuteIndirect       = SLOT(ID3D12GraphicsCommandListVtb
 unsigned RGPU_SLOT_GCL6_DispatchMesh         = SLOT(ID3D12GraphicsCommandList6Vtbl, DispatchMesh);   /* mesh shaders (Nanite) */
 unsigned RGPU_SLOT_GCL7_Barrier              = SLOT(ID3D12GraphicsCommandList7Vtbl, Barrier);         /* enhanced barriers (UE5 5.x) */
 unsigned RGPU_SLOT_Factory_CreateDevice      = SLOT(ID3D12DeviceFactoryVtbl, CreateDevice);
-unsigned RGPU_SLOT_SDKConfig1_CreateDeviceFactory = SLOT(ID3D12SDKConfiguration1Vtbl, CreateDeviceFactory);
 }

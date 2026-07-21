@@ -1,0 +1,115 @@
+{
+    "started_utc":  "2026-07-21T03:47:08.7366385Z",
+    "duration_seconds":  30,
+    "game_exe":  "C:\\Program Files\\Tokyo Xtreme Racer\\TokyoXtremeRacer\\Binaries\\Win64\\TokyoXtremeRacer-Win64-Shipping.exe",
+    "d3d12_proxy_sha256":  "7500AD18942FDB237A3DABD194B6FFF87AFC87EEBFE90F7AFE4B6C93BFB32064",
+    "dxgi_proxy_sha256":  "0C7AA94D62F42184AF850AD8E45055761994F91C6B68BF0B481CEFC71BB2A73D",
+    "launch_pid":  40944,
+    "observations":  [
+                         {
+                             "elapsed_seconds":  5,
+                             "process_count":  1,
+                             "pids":  [
+                                          40944
+                                      ],
+                             "working_set_mb":  627.1,
+                             "d3d12_log_bytes":  6451,
+                             "dxgi_log_bytes":  8761
+                         },
+                         {
+                             "elapsed_seconds":  10,
+                             "process_count":  1,
+                             "pids":  [
+                                          40944
+                                      ],
+                             "working_set_mb":  999.7,
+                             "d3d12_log_bytes":  6451,
+                             "dxgi_log_bytes":  8761
+                         },
+                         {
+                             "elapsed_seconds":  15,
+                             "process_count":  1,
+                             "pids":  [
+                                          40944
+                                      ],
+                             "working_set_mb":  2459.2,
+                             "d3d12_log_bytes":  6451,
+                             "dxgi_log_bytes":  8761
+                         },
+                         {
+                             "elapsed_seconds":  20,
+                             "process_count":  1,
+                             "pids":  [
+                                          40944
+                                      ],
+                             "working_set_mb":  2084.3,
+                             "d3d12_log_bytes":  6451,
+                             "dxgi_log_bytes":  8761
+                         },
+                         {
+                             "elapsed_seconds":  25,
+                             "process_count":  1,
+                             "pids":  [
+                                          40944
+                                      ],
+                             "working_set_mb":  1989.6,
+                             "d3d12_log_bytes":  6451,
+                             "dxgi_log_bytes":  8761
+                         },
+                         {
+                             "elapsed_seconds":  30,
+                             "process_count":  1,
+                             "pids":  [
+                                          40944
+                                      ],
+                             "working_set_mb":  1985.4,
+                             "d3d12_log_bytes":  6451,
+                             "dxgi_log_bytes":  8761
+                         }
+                     ],
+    "unique_pids":  [
+                        40944
+                    ],
+    "stable":  true,
+    "dxgi_markers":  {
+                         "early_active":  1,
+                         "hook_yes":  5,
+                         "ags_call":  0,
+                         "handed":  0,
+                         "arm_missing":  0,
+                         "core_monitor":  0,
+                         "core_hook_yes":  0,
+                         "core_getinterface":  0,
+                         "core_sdk_factory":  0,
+                         "core_factory_device":  0,
+                         "core_handed":  0
+                     },
+    "d3d12_markers":  {
+                          "attach":  1,
+                          "external_ags_arm":  0,
+                          "armed_ags":  0,
+                          "external_core_arm":  0,
+                          "armed_core":  0,
+                          "check_feature_support":  0,
+                          "queue_base":  0,
+                          "queue1":  0,
+                          "list_base":  0,
+                          "list1":  0,
+                          "submit":  0,
+                          "draw":  0,
+                          "dispatch":  0,
+                          "barrier":  0,
+                          "indirect":  0,
+                          "close":  0
+                      },
+    "ags_hook_installed":  true,
+    "ags_call_intercepted":  false,
+    "ags_device_armed":  false,
+    "core_hook_installed":  false,
+    "core_getinterface_intercepted":  false,
+    "core_device_armed":  false,
+    "command_stream_live":  false,
+    "cleanup_ok":  true,
+    "error":  null,
+    "completed_utc":  "2026-07-21T03:47:45.2417020Z"
+}

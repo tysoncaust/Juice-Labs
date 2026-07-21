@@ -310,8 +310,15 @@ static HRESULT STDMETHODCALLTYPE h_DevCCQ1(ID3D12Device9 *T, const D3D12_COMMAND
 static HRESULT STDMETHODCALLTYPE h_DevCCL(ID3D12Device *T, UINT nm, D3D12_COMMAND_LIST_TYPE ty, ID3D12CommandAllocator *a, ID3D12PipelineState *ps, REFIID r, void **pp){ once_log(&l_ccl,"game called CreateCommandList (base)"); HRESULT hr=o_DevCCL(T,nm,ty,a,ps,r,pp); if(SUCCEEDED(hr)&&pp)arm_list_from_any(*pp); return hr; }
 static HRESULT STDMETHODCALLTYPE h_DevCCL1(ID3D12Device4 *T, UINT nm, D3D12_COMMAND_LIST_TYPE ty, D3D12_COMMAND_LIST_FLAGS f, REFIID r, void **pp){ once_log(&l_ccl1,"game called CreateCommandList1 (Agility)"); HRESULT hr=o_DevCCL1(T,nm,ty,f,r,pp); if(SUCCEEDED(hr)&&pp)arm_list_from_any(*pp); return hr; }
 
-/* Inline-hook device methods from the real returned interface. This survives
- * UE4SS/overlay vtable replacement just like the queue/list inline hooks. */
+static void *g_hooked_base_dev_vtbl = nullptr;
+static void *g_hooked_dev4_vtbl = nullptr;
+static void *g_hooked_dev9_vtbl = nullptr;
+
+/* Patch the correct COM interface pointer for each method. The previous version
+ * queried ID3D12Device4/9 but accidentally passed the original base pointer to
+ * patch_slot with Device4/9 slot numbers. That could write beyond a base vtable
+ * and, more importantly, did not hook calls made through the actual versioned
+ * interface that UE5 holds. */
 static void arm_from_device(ID3D12Device *dev, const char *which) {
     if (!dev) return;
 
@@ -322,46 +329,34 @@ static void arm_from_device(ID3D12Device *dev, const char *which) {
     dev->QueryInterface(__uuidof(ID3D12Device4), (void **)&d4);
     dev->QueryInterface(__uuidof(ID3D12Device9), (void **)&d9);
 
+    bool pcfs = false, pq = false, pl = false, pq1 = false, pl1 = false;
     void *bv = base ? *(void **)base : nullptr;
     void *v4 = d4 ? *(void **)d4 : nullptr;
     void *v9 = d9 ? *(void **)d9 : nullptr;
 
-    HookItem items[5]; int n = 0;
-    auto add = [&](void *obj, unsigned slot, void *detour, void **orig, const char *name) {
-        if (obj && !*orig && n < 5) items[n++] = { vslot(obj, slot), detour, orig, name };
-    };
-    add(base, RGPU_SLOT_Device_CheckFeatureSupport, (void *)h_CFS, (void **)&o_CFS,
-        "Device::CheckFeatureSupport");
-    add(base, RGPU_SLOT_Device_CreateCommandQueue, (void *)h_DevCCQ, (void **)&o_DevCCQ,
-        "Device::CreateCommandQueue");
-    add(base, RGPU_SLOT_Device_CreateCommandList, (void *)h_DevCCL, (void **)&o_DevCCL,
-        "Device::CreateCommandList");
-    add(d4, RGPU_SLOT_Device4_CreateCommandList1, (void *)h_DevCCL1, (void **)&o_DevCCL1,
-        "Device4::CreateCommandList1");
-    add(d9, RGPU_SLOT_Device9_CreateCommandQueue1, (void *)h_DevCCQ1, (void **)&o_DevCCQ1,
-        "Device9::CreateCommandQueue1");
-    install_batch_frozen(items, n);
+    if (base && bv != g_hooked_base_dev_vtbl) {
+        pcfs = patch_slot(base, RGPU_SLOT_Device_CheckFeatureSupport,
+                          (void *)h_CFS, (void **)&o_CFS);
+        pq = patch_slot(base, RGPU_SLOT_Device_CreateCommandQueue,
+                        (void *)h_DevCCQ, (void **)&o_DevCCQ);
+        pl = patch_slot(base, RGPU_SLOT_Device_CreateCommandList,
+                        (void *)h_DevCCL, (void **)&o_DevCCL);
+        if (pcfs && pq && pl) g_hooked_base_dev_vtbl = bv;
+    }
+    if (d4 && v4 != g_hooked_dev4_vtbl) {
+        pl1 = patch_slot(d4, RGPU_SLOT_Device4_CreateCommandList1,
+                         (void *)h_DevCCL1, (void **)&o_DevCCL1);
+        if (pl1) g_hooked_dev4_vtbl = v4;
+    }
+    if (d9 && v9 != g_hooked_dev9_vtbl) {
+        pq1 = patch_slot(d9, RGPU_SLOT_Device9_CreateCommandQueue1,
+                         (void *)h_DevCCQ1, (void **)&o_DevCCQ1);
+        if (pq1) g_hooked_dev9_vtbl = v9;
+    }
 
-    /* The conservative inline decoder can reject some base-method prologues.
-     * Keep a safe vtable fallback for those exact methods; the Agility 1 methods
-     * remain inline-hooked and therefore survive later overlay vtable changes. */
-    bool fbCFS = false, fbCCQ = false, fbCCL = false, fbCCQ1 = false, fbCCL1 = false;
-    if (base && !o_CFS) fbCFS = patch_slot(base, RGPU_SLOT_Device_CheckFeatureSupport,
-                                            (void *)h_CFS, (void **)&o_CFS);
-    if (base && !o_DevCCQ) fbCCQ = patch_slot(base, RGPU_SLOT_Device_CreateCommandQueue,
-                                              (void *)h_DevCCQ, (void **)&o_DevCCQ);
-    if (base && !o_DevCCL) fbCCL = patch_slot(base, RGPU_SLOT_Device_CreateCommandList,
-                                              (void *)h_DevCCL, (void **)&o_DevCCL);
-    if (d9 && !o_DevCCQ1) fbCCQ1 = patch_slot(d9, RGPU_SLOT_Device9_CreateCommandQueue1,
-                                               (void *)h_DevCCQ1, (void **)&o_DevCCQ1);
-    if (d4 && !o_DevCCL1) fbCCL1 = patch_slot(d4, RGPU_SLOT_Device4_CreateCommandList1,
-                                               (void *)h_DevCCL1, (void **)&o_DevCCL1);
-
-    rgpu_log("armed-hybrid %s device input=%p base=%p/vtbl=%p d4=%p/vtbl=%p d9=%p/vtbl=%p originals CFS=%p CCQ=%p CCL=%p CCQ1=%p CCL1=%p fallback=%d/%d/%d/%d/%d",
+    rgpu_log("armed %s device input=%p base=%p/vtbl=%p d4=%p/vtbl=%p d9=%p/vtbl=%p: CFS=%d CCQ=%d CCL=%d CCQ1=%d CCL1=%d",
              which, (void *)dev, (void *)base, bv, (void *)d4, v4, (void *)d9, v9,
-             (void *)o_CFS, (void *)o_DevCCQ, (void *)o_DevCCL,
-             (void *)o_DevCCQ1, (void *)o_DevCCL1,
-             fbCFS, fbCCQ, fbCCL, fbCCQ1, fbCCL1);
+             pcfs, pq, pl, pq1, pl1);
 
     if (d9) d9->Release();
     if (d4) d4->Release();
@@ -455,12 +450,6 @@ static bool hook_sdk_configuration(void *obj) {
     }
     sdk->Release();
     return ok;
-}
-
-extern "C" __declspec(dllexport) void WINAPI rgpu_d3d12_arm_external_device(ID3D12Device *dev, const char *source) {
-    rgpu_log("external device arm source=%s device=%p vtbl=%p",
-             source ? source : "unknown", (void *)dev, dev ? *(void **)dev : nullptr);
-    arm_from_device(dev, source ? source : "external");
 }
 
 /* ---------------- system d3d12.dll forwarding ----------------------------- */

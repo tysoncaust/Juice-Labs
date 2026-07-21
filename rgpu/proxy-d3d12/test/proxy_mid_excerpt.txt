@@ -1,0 +1,115 @@
+191:     uint32_t m = maxCount; tee(RGPU_CMD_DRAW, oid(This), &m, sizeof(m));
+192:     o_ExecuteIndirect(This, sig, maxCount, args, argOff, cnt, cntOff);
+193: }
+194: 
+195: /* Patch the shared ID3D12GraphicsCommandList vtable (caller owns the list ref). */
+196: static void hook_gcl_vtable(ID3D12GraphicsCommandList *gl) {
+197:     patch_slot(gl, RGPU_SLOT_GCL_DrawInstanced,         (void *)h_DrawInstanced,        (void **)&o_DrawInstanced);
+198:     patch_slot(gl, RGPU_SLOT_GCL_DrawIndexedInstanced,  (void *)h_DrawIndexedInstanced, (void **)&o_DrawIndexedInstanced);
+199:     patch_slot(gl, RGPU_SLOT_GCL_Dispatch,              (void *)h_Dispatch,             (void **)&o_Dispatch);
+200:     patch_slot(gl, RGPU_SLOT_GCL_ResourceBarrier,       (void *)h_ResourceBarrier,      (void **)&o_ResourceBarrier);
+201:     patch_slot(gl, RGPU_SLOT_GCL_ClearRenderTargetView, (void *)h_ClearRTV,             (void **)&o_ClearRTV);
+202:     patch_slot(gl, RGPU_SLOT_GCL_OMSetRenderTargets,    (void *)h_OMSetRenderTargets,   (void **)&o_OMSetRenderTargets);
+203:     patch_slot(gl, RGPU_SLOT_GCL_CopyResource,          (void *)h_CopyResource,         (void **)&o_CopyResource);
+204:     patch_slot(gl, RGPU_SLOT_GCL_Close,                 (void *)h_Close,                (void **)&o_Close);
+205:     rgpu_log("hooked ID3D12GraphicsCommandList recording slots (Draw/Dispatch/Barrier/Clear/OMSetRT/Copy/Close)");
+206: }
+207: 
+208: /* ---- ID3D12CommandQueue::ExecuteCommandLists hook (submission boundary) --- */
+209: static void STDMETHODCALLTYPE h_ExecuteCommandLists(ID3D12CommandQueue *This, UINT n, ID3D12CommandList *const *pp) {
+210:     LONG e = InterlockedIncrement(&g_exec);
+211:     InterlockedExchangeAdd(&g_lists, (LONG)n);
+212:     uint32_t nn = n; tee(RGPU_CMD_EXECUTE_COMMAND_LISTS, 0, &nn, sizeof(nn));
+213:     o_ExecuteCommandLists(This, n, pp);
+214:     if (e == 1 || (e % 600) == 0) {
+215:         EnterCriticalSection(&g_cs); uint32_t bytes = g_bw.len; LeaveCriticalSection(&g_cs);
+216:         rgpu_log("submit#%ld lists=%ld | tee draws=%ld dispatch=%ld barriers=%ld clears=%ld setRT=%ld copies=%ld | batch=%u bytes",
+217:                  e, g_lists, g_draws, g_dispatch, g_barriers, g_clears, g_rts, g_copies, bytes);
+218:     }
+219: }
+220: 
+221: /* Read the function pointer at a vtable slot of a fresh (un-tampered) object. */
+222: static void *vslot(void *obj, unsigned idx) { return (*(void ***)obj)[idx]; }
+223: 
+224: /* Inline-hook a target function ONCE (guarded by *orig, which becomes the
+225:  * trampoline that calls the original). INLINE hooking rewrites the function BODY,
+226:  * so a third-party overlay (UE4SS) that re-patches the same vtable slot afterwards
+227:  * cannot bypass us — the reason plain vtable hooking failed to capture TXR. */
+228: static void arm_inline_once(void *fn, void *detour, void **orig, const char *name) {
+229:     if (*orig) return;                    /* already inline-hooked */
+230:     void *tramp = nullptr;
+231:     if (rgpu_inline_hook(fn, detour, &tramp)) { *orig = tramp; rgpu_log("inline-hooked %s @ %p", name, fn); }
+232:     else rgpu_log("inline-hook ABORTED for %s @ %p (prologue not relocatable; left unhooked)", name, fn);
+233: }
+234: 
+235: /* Suspend every OTHER thread in the process so writing D3D12Core code pages can't
+236:  * race a thread executing the function being patched (the crash that boot-looped
+237:  * TXR). MinHook-style. While frozen we must NOT touch the CRT heap (malloc / fopen)
+238:  * or we could deadlock on a lock a frozen thread holds — so no logging/allocation
+239:  * there; rgpu_inline_hook uses only VirtualAlloc/Protect syscalls. */
+240: static HANDLE g_frozen[4096]; static int g_nfrozen = 0;
+241: static void rgpu_freeze_other_threads() {
+242:     g_nfrozen = 0;
+243:     DWORD pid = GetCurrentProcessId(), tid = GetCurrentThreadId();
+244:     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+245:     if (snap == INVALID_HANDLE_VALUE) return;
+246:     THREADENTRY32 te; te.dwSize = sizeof(te);
+247:     if (Thread32First(snap, &te)) do {
+248:         if (te.th32OwnerProcessID == pid && te.th32ThreadID != tid) {
+249:             HANDLE h = OpenThread(THREAD_SUSPEND_RESUME, FALSE, te.th32ThreadID);
+250:             if (h) { if (SuspendThread(h) != (DWORD)-1 && g_nfrozen < 4096) g_frozen[g_nfrozen++] = h; else CloseHandle(h); }
+251:         }
+252:     } while (Thread32Next(snap, &te));
+253:     CloseHandle(snap);
+254: }
+255: static void rgpu_resume_other_threads() {
+256:     for (int i = 0; i < g_nfrozen; i++) { ResumeThread(g_frozen[i]); CloseHandle(g_frozen[i]); }
+257:     g_nfrozen = 0;
+258: }
+259: struct HookItem { void *fn; void *detour; void **orig; const char *name; };
+260: static void install_batch_frozen(HookItem *items, int n) {
+261:     if (!n) return;
+262:     rgpu_freeze_other_threads();
+263:     for (int i = 0; i < n; i++) { void *tr = nullptr; if (rgpu_inline_hook(items[i].fn, items[i].detour, &tr)) *items[i].orig = tr; }
+264:     rgpu_resume_other_threads();
+265:     for (int i = 0; i < n; i++) rgpu_log("%s %s @ %p", *items[i].orig ? "inline-hooked" : "inline-hook ABORTED for", items[i].name, items[i].fn);
+266: }
+267: 
+268: /* Inline-hook the ExecuteCommandLists / recording functions read from the GAME's
+269:  * ACTUAL objects (their concrete D3D12Core class can differ from a base throwaway
+270:  * list). Installed as a thread-frozen batch so the live runtime isn't corrupted. */
+271: static void arm_queue_functions(ID3D12CommandQueue *q) {
+272:     if (o_ExecuteCommandLists) return;
+273:     HookItem it[1] = {{ vslot(q, RGPU_SLOT_Queue_ExecuteCommandLists), (void *)h_ExecuteCommandLists, (void **)&o_ExecuteCommandLists, "ExecuteCommandLists" }};
+274:     install_batch_frozen(it, 1);
+275: }
+276: static void arm_list_functions(ID3D12GraphicsCommandList *list) {
+277:     HookItem it[20]; int n = 0;
+278:     auto add = [&](unsigned slot, void *det, void **orig, const char *nm) { if (!*orig && n < 20) it[n++] = { vslot(list, slot), det, orig, nm }; };
+279:     add(RGPU_SLOT_GCL_DrawInstanced,         (void *)h_DrawInstanced,        (void **)&o_DrawInstanced,        "DrawInstanced");
+280:     add(RGPU_SLOT_GCL_DrawIndexedInstanced,  (void *)h_DrawIndexedInstanced, (void **)&o_DrawIndexedInstanced, "DrawIndexedInstanced");
+281:     add(RGPU_SLOT_GCL_Dispatch,              (void *)h_Dispatch,             (void **)&o_Dispatch,             "Dispatch");
+282:     add(RGPU_SLOT_GCL_ResourceBarrier,       (void *)h_ResourceBarrier,      (void **)&o_ResourceBarrier,      "ResourceBarrier");
+283:     add(RGPU_SLOT_GCL_ClearRenderTargetView, (void *)h_ClearRTV,             (void **)&o_ClearRTV,             "ClearRenderTargetView");
+284:     add(RGPU_SLOT_GCL_OMSetRenderTargets,    (void *)h_OMSetRenderTargets,   (void **)&o_OMSetRenderTargets,   "OMSetRenderTargets");
+285:     add(RGPU_SLOT_GCL_CopyResource,          (void *)h_CopyResource,         (void **)&o_CopyResource,         "CopyResource");
+286:     add(RGPU_SLOT_GCL_ExecuteIndirect,       (void *)h_ExecuteIndirect,      (void **)&o_ExecuteIndirect,      "ExecuteIndirect");
+287:     ID3D12GraphicsCommandList6 *gl6 = nullptr;
+288:     if (SUCCEEDED(list->QueryInterface(__uuidof(ID3D12GraphicsCommandList6), (void **)&gl6)) && gl6) { add(RGPU_SLOT_GCL6_DispatchMesh, (void *)h_DispatchMesh, (void **)&o_DispatchMesh, "DispatchMesh"); gl6->Release(); }
+289:     ID3D12GraphicsCommandList7 *gl7 = nullptr;
+290:     if (SUCCEEDED(list->QueryInterface(__uuidof(ID3D12GraphicsCommandList7), (void **)&gl7)) && gl7) { add(RGPU_SLOT_GCL7_Barrier, (void *)h_Barrier, (void **)&o_Barrier, "Barrier(enhanced)"); gl7->Release(); }
+291:     install_batch_frozen(it, n);
+292: }
+293: static void arm_queue_from_any(void *o) { ID3D12CommandQueue *q=nullptr; if (o && SUCCEEDED(((IUnknown*)o)->QueryInterface(__uuidof(ID3D12CommandQueue),(void**)&q))&&q){ arm_queue_functions(q); q->Release(); } }
+294: static void arm_list_from_any(void *o)  { ID3D12GraphicsCommandList *l=nullptr; if (o && SUCCEEDED(((IUnknown*)o)->QueryInterface(__uuidof(ID3D12GraphicsCommandList),(void**)&l))&&l){ arm_list_functions(l); l->Release(); } }
+295: 
+296: /* Vtable hooks on the DEVICE's create methods (device vtable is not contended by
+297:  * overlays) so we see the game's REAL queues/lists and inline-hook THEIR functions. */
+298: typedef HRESULT (STDMETHODCALLTYPE *fnDevCCQ)(ID3D12Device *, const D3D12_COMMAND_QUEUE_DESC *, REFIID, void **);
+299: typedef HRESULT (STDMETHODCALLTYPE *fnDevCCQ1)(ID3D12Device9 *, const D3D12_COMMAND_QUEUE_DESC *, REFIID, REFIID, void **);
+300: typedef HRESULT (STDMETHODCALLTYPE *fnDevCCL)(ID3D12Device *, UINT, D3D12_COMMAND_LIST_TYPE, ID3D12CommandAllocator *, ID3D12PipelineState *, REFIID, void **);
+301: typedef HRESULT (STDMETHODCALLTYPE *fnDevCCL1)(ID3D12Device4 *, UINT, D3D12_COMMAND_LIST_TYPE, D3D12_COMMAND_LIST_FLAGS, REFIID, void **);
+302: static fnDevCCQ o_DevCCQ; static fnDevCCQ1 o_DevCCQ1; static fnDevCCL o_DevCCL; static fnDevCCL1 o_DevCCL1;
+303: static void once_log(volatile LONG *g, const char *m) { if (InterlockedCompareExchange(g, 1, 0) == 0) rgpu_log("%s", m); }
+304: static volatile LONG l_ccq=0, l_ccq1=0, l_ccl=0, l_ccl1=0, l_cfs=0;
+305: typedef HRESULT (STDMETHODCALLTYPE *fnCFS)(ID3D12Device *, D3D12_FEATURE, void *, UINT);
