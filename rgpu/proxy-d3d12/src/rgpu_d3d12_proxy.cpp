@@ -22,12 +22,15 @@
  * additionally needs the resource object-graph + handle translation - see README.) */
 #include <windows.h>
 #include <tlhelp32.h>
+#include <psapi.h>
 #include <d3d12.h>
 #include <dxgi.h>
 #include <cstdio>
 #include <cstdarg>
 #include <cstring>
+#include <cwchar>
 #include <cstdint>
+#include <cstdlib>
 #include "rgpu_inlinehook.h"
 #include "../../proto/rgpu_cmds.h"
 
@@ -60,6 +63,12 @@ static void tee(uint32_t op, uint32_t handle, const void *a, uint32_t n) {
     LeaveCriticalSection(&g_cs);
 }
 static inline uint32_t oid(const void *p) { return (uint32_t)(uintptr_t)p; }
+
+/* Full COM wrapper object-graph (device/queue/list). Included here so its methods
+ * can use the tee (tee/oid/counters/rgpu_log) defined above. This is the deterministic
+ * interceptor the game cannot route around; the vtable/inline hooks below remain for
+ * the external-arm export + diagnostics. */
+#include "rgpu_d3d12_wrappers.h"
 
 /* ---------------- vtable hooking ------------------------------------------ */
 /* ABI-stable vtable slot indices (D3D12 interface layout is frozen). Derived by
@@ -417,7 +426,10 @@ static HRESULT STDMETHODCALLTYPE h_FactoryCreateDevice(ID3D12DeviceFactory *This
     bool warp = adapter_is_warp(adapter);
     rgpu_log("ID3D12DeviceFactory::CreateDevice fl=0x%X adapter=%s -> hr=0x%08lX device=%p",
              (unsigned)fl, warp ? "WARP" : "hardware", (unsigned long)hr, pp ? *pp : nullptr);
-    if (SUCCEEDED(hr) && pp && *pp && !warp) arm_from_device((ID3D12Device *)*pp, "DeviceFactory");
+    if (SUCCEEDED(hr) && pp && *pp && !warp) {
+        void *raw = *pp; *pp = rgpu_wrap_device(raw, riid);
+        rgpu_log("  -> returned RgpuD3D12Device wrapper %p over real %p (DeviceFactory path)", *pp, raw);
+    }
     return hr;
 }
 
@@ -457,6 +469,244 @@ static bool hook_sdk_configuration(void *obj) {
     return ok;
 }
 
+/* ---- Agility D3D12Core.dll direct interception --------------------------
+ * TXR (UE5 + Agility 1.614) loads D3D12Core.dll itself and calls its ONLY export,
+ * D3D12Core!D3D12GetInterface, to reach ID3D12SDKConfiguration1::CreateDeviceFactory
+ * -> ID3D12DeviceFactory::CreateDevice. That real device is created entirely inside
+ * D3D12Core and never touches our app-level d3d12.dll exports (which see only the
+ * early FL_1_0_CORE probe devices). So we hook D3D12Core's export directly; from
+ * there the existing SDKConfiguration/factory hooks wrap the device the game keeps. */
+static void rgpu_after_get_interface(REFCLSID rclsid, void **ppv) {
+    if (!ppv || !*ppv) return;
+    /* Detect by TYPE, not CLSID: UE5/Agility may request the SDK-configuration or the
+     * device-factory under a CLSID we don't hard-code, so QI the returned object for
+     * both interfaces and hook whichever it actually is. */
+    IUnknown *u = (IUnknown *)*ppv;
+    /* Identify the returned object by probing a battery of known D3D12 interfaces
+     * (some newer than mingw's headers - defined by GUID here). This tells us which
+     * object the Agility bootstrap uses so we can hook its device-creation method. */
+    struct { const char *name; GUID iid; } probes[] = {
+        { "ID3D12Device",             __uuidof(ID3D12Device) },
+        { "ID3D12DeviceFactory",      __uuidof(ID3D12DeviceFactory) },
+        { "ID3D12SDKConfiguration",   __uuidof(ID3D12SDKConfiguration) },
+        { "ID3D12SDKConfiguration1",  __uuidof(ID3D12SDKConfiguration1) },
+        /* ID3D12DeviceConfiguration (Agility) - not in this mingw header */
+        { "ID3D12DeviceConfiguration",{0x78dbf87b,0xf766,0x422b,{0xa6,0x1c,0xc8,0xc4,0x46,0xbd,0xb9,0xad}} },
+        { "ID3D12Tools",              {0x7071e1f0,0xe84b,0x4b33,{0x97,0x4f,0x12,0xfa,0x49,0xde,0x65,0xc5}} },
+    };
+    char hits[512]; hits[0] = 0;
+    for (auto &pr : probes) {
+        void *t = nullptr;
+        if (SUCCEEDED(u->QueryInterface(pr.iid, &t)) && t) {
+            ((IUnknown *)t)->Release();
+            std::strcat(hits, pr.name); std::strcat(hits, " ");
+        }
+    }
+    rgpu_log("after_get_interface clsid={%08lX-%04X-%04X-%02X%02X%02X%02X%02X%02X%02X%02X} obj=%p supports=[%s]",
+             (unsigned long)rclsid.Data1, rclsid.Data2, rclsid.Data3,
+             rclsid.Data4[0], rclsid.Data4[1], rclsid.Data4[2], rclsid.Data4[3],
+             rclsid.Data4[4], rclsid.Data4[5], rclsid.Data4[6], rclsid.Data4[7], *ppv, hits[0] ? hits : "(none)");
+    ID3D12SDKConfiguration1 *sdk = nullptr; ID3D12DeviceFactory *fac = nullptr;
+    if (SUCCEEDED(u->QueryInterface(__uuidof(ID3D12SDKConfiguration1), (void **)&sdk)) && sdk) { sdk->Release(); hook_sdk_configuration(*ppv); }
+    if (SUCCEEDED(u->QueryInterface(__uuidof(ID3D12DeviceFactory), (void **)&fac)) && fac) { fac->Release(); hook_factory_object(*ppv); }
+}
+typedef HRESULT (WINAPI *fnGetInterfaceExport)(REFCLSID, REFIID, void **);
+static fnGetInterfaceExport o_CoreGetInterface = nullptr;
+
+/* --- private-bootstrap-interface slot identification -----------------------
+ * TXR's real device is created by a method on D3D12Core's PRIVATE bootstrap object
+ * (CLSID {AFEE8EAE-...}, IID {DFAFDD2C-...}) which exposes no public interface. To
+ * find its create-device slot we hook every vtable slot with a generic 8-arg
+ * forwarder (a safe superset on Win64: the callee reads only the args it needs) that
+ * logs its arguments and detects when an out-param is filled with a D3D12 device
+ * (vtable inside D3D12Core). The slot that yields a device IS create-device. */
+typedef uint64_t (STDMETHODCALLTYPE *rgpu_fn8)(void *, void *, void *, void *, void *, void *, void *, void *);
+static uintptr_t g_core_base = 0, g_core_end = 0;
+/* Safely read a pointer-sized value from p (mingw g++ has no __try/__except), via
+ * VirtualQuery so a non-pointer argument (e.g. an integer FL) can't fault us. */
+static bool safe_read_ptr(void *p, void **out) {
+    if (!p || ((uintptr_t)p & 7)) return false;
+    MEMORY_BASIC_INFORMATION mbi{};
+    if (!VirtualQuery(p, &mbi, sizeof(mbi)) || mbi.State != MEM_COMMIT) return false;
+    DWORD pr = mbi.Protect;
+    if (pr & (PAGE_GUARD | PAGE_NOACCESS)) return false;
+    if (!(pr & (PAGE_READONLY | PAGE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY))) return false;
+    *out = *(void **)p; return true;
+}
+/* An object created by D3D12Core that lives on the heap (not a static in the module):
+ * a candidate freshly-made device. Static core singletons (the private object itself,
+ * its vtable) are inside the module range and excluded. */
+static bool is_heap_core_object(void *obj) {
+    uintptr_t o = (uintptr_t)obj;
+    if (!o || (o >= g_core_base && o < g_core_end)) return false;
+    void *vt; if (!safe_read_ptr(obj, &vt)) return false;
+    uintptr_t v = (uintptr_t)vt; return v >= g_core_base && v < g_core_end;
+}
+/* THE device-creation method (slot 7 of the private bootstrap interface for this
+ * D3D12Core). It writes a new ID3D12Device to an out-parameter; we wrap that device in
+ * place so the runtime (and the game) receive OUR RgpuD3D12Device - the interception
+ * point that the public D3D12CreateDevice / factory routes never reach for TXR. */
+static void *o_priv_create = nullptr;
+static volatile LONG g_priv_wrapped = 0;
+/* Wrapping the device HERE (the D3D12Core-internal factory boundary) destabilises the
+ * game: this device object is consumed by concrete D3D12Core/d3d12.dll code that reads
+ * non-COM internal fields at fixed offsets, which a COM wrapper does not provide. So
+ * this hook is OBSERVE-ONLY by default - it records the caller + the produced device so
+ * a later pass can wrap at the PUBLIC boundary (where UE5 receives a pure-COM device).
+ * Flip g_priv_wrap_enabled only for experiments. */
+static volatile LONG g_priv_wrap_enabled = 0;
+static uint64_t STDMETHODCALLTYPE h_priv_create(void *This, void *a1, void *a2, void *a3, void *a4, void *a5, void *a6, void *a7) {
+    void *caller = __builtin_return_address(0);
+    uint64_t r = ((rgpu_fn8)o_priv_create)(This, a1, a2, a3, a4, a5, a6, a7);
+    void *args[6] = {a1, a2, a3, a4, a5, a6};
+    for (int k = 0; k < 6; k++) {
+        void *obj;
+        if (!safe_read_ptr(args[k], &obj) || !is_heap_core_object(obj)) continue;
+        IUnknown *u = (IUnknown *)obj;
+        void *already = nullptr;
+        if (SUCCEEDED(u->QueryInterface(IID_RgpuUnwrap, &already))) break;   /* already our wrapper */
+        ID3D12Device *dev = nullptr;
+        if (SUCCEEDED(u->QueryInterface(__uuidof(ID3D12Device), (void **)&dev)) && dev) {
+            dev->Release();
+            HMODULE cm = nullptr;
+            GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                               (LPCSTR)caller, &cm);
+            char cn[MAX_PATH] = "?"; if (cm) GetModuleBaseNameA(GetCurrentProcess(), cm, cn, sizeof(cn));
+            LONG w = InterlockedIncrement(&g_priv_wrapped);
+            rgpu_log("private create-slot produced device #%ld real=%p (out-arg %d) caller=%p[%s] wrap_enabled=%ld",
+                     w, obj, k, caller, cn, g_priv_wrap_enabled);
+            if (g_priv_wrap_enabled)
+                *(void **)args[k] = rgpu_wrap_device(obj, __uuidof(ID3D12Device));
+            break;
+        }
+    }
+    return r;
+}
+static volatile LONG g_priv_probed = 0;
+/* The device-factory method is slot 7 of this D3D12Core (1.614)'s private bootstrap
+ * interface, identified empirically (it emits heap ID3D12Device objects, once per
+ * D3D12CreateDevice). Hook it so EVERY device it makes - including TXR's real render
+ * device, which never appears via the public entry points - becomes our wrapper. */
+static const int RGPU_PRIV_CREATE_SLOT = 7;
+static void install_private_probes(void *obj) {
+    if (!obj || InterlockedCompareExchange(&g_priv_probed, 1, 0) != 0) return;
+    HMODULE core = GetModuleHandleA("D3D12Core.dll");
+    MODULEINFO mi{}; if (core && GetModuleInformation(GetCurrentProcess(), core, &mi, sizeof(mi))) {
+        g_core_base = (uintptr_t)mi.lpBaseOfDll; g_core_end = g_core_base + mi.SizeOfImage;
+    }
+    bool ok = patch_slot(obj, RGPU_PRIV_CREATE_SLOT, (void *)h_priv_create, &o_priv_create);
+    rgpu_log("hooked private bootstrap create-device slot[%d] on %p (core %p..%p): %s",
+             RGPU_PRIV_CREATE_SLOT, obj, (void *)g_core_base, (void *)g_core_end, ok ? "OK" : "FAILED");
+}
+static HRESULT WINAPI h_CoreGetInterface(REFCLSID rclsid, REFIID riid, void **ppv) {
+    HRESULT hr = o_CoreGetInterface(rclsid, riid, ppv);
+    rgpu_log("D3D12Core!D3D12GetInterface clsid.Data1=%08lX riid={%08lX-%04X-%04X-%02X%02X%02X%02X%02X%02X%02X%02X} -> hr=0x%08lX obj=%p",
+             (unsigned long)rclsid.Data1,
+             (unsigned long)riid.Data1, riid.Data2, riid.Data3,
+             riid.Data4[0], riid.Data4[1], riid.Data4[2], riid.Data4[3],
+             riid.Data4[4], riid.Data4[5], riid.Data4[6], riid.Data4[7],
+             (unsigned long)hr, (SUCCEEDED(hr) && ppv) ? *ppv : nullptr);
+    if (SUCCEEDED(hr) && ppv && *ppv) {
+        /* Dump the private bootstrap object's vtable so we can find its device-creation
+         * slot (offsets relative to D3D12Core base for offline disassembly). */
+        void **vt = *(void ***)*ppv;
+        HMODULE core = GetModuleHandleA("D3D12Core.dll");
+        uintptr_t base = (uintptr_t)core;
+        char line[900]; int off = 0;
+        off += std::snprintf(line + off, sizeof(line) - off, "  private-obj vtbl=%p entries(core+off):", (void *)vt);
+        for (int i = 0; i < 24 && off < (int)sizeof(line) - 32; i++) {
+            void *fn = vt[i];
+            uintptr_t rel = (uintptr_t)fn - base;
+            if (fn && rel < 0x400000) off += std::snprintf(line + off, sizeof(line) - off, " [%d]=+%llX", i, (unsigned long long)rel);
+            else                      off += std::snprintf(line + off, sizeof(line) - off, " [%d]=%p", i, fn);
+        }
+        rgpu_log("%s", line);
+        /* If it exposes no public interface, it is the private bootstrap object - probe
+         * its slots to find the create-device method. */
+        ID3D12DeviceFactory *fac = nullptr; ID3D12SDKConfiguration1 *sdk = nullptr;
+        bool pub = (SUCCEEDED(((IUnknown *)*ppv)->QueryInterface(__uuidof(ID3D12DeviceFactory), (void **)&fac)) && fac) ||
+                   (SUCCEEDED(((IUnknown *)*ppv)->QueryInterface(__uuidof(ID3D12SDKConfiguration1), (void **)&sdk)) && sdk);
+        if (fac) fac->Release(); if (sdk) sdk->Release();
+        if (!pub) install_private_probes(*ppv);
+    }
+    if (SUCCEEDED(hr)) rgpu_after_get_interface(rclsid, ppv);
+    return hr;
+}
+static volatile LONG g_core_hooked = 0;
+/* Hook a SPECIFIC D3D12Core module (by base). The Agility loader maps its OWN copy
+ * of D3D12Core at a private base (distinct from a plain LoadLibrary), so we must hook
+ * the exact module the runtime uses - passing its base explicitly, not GetModuleHandle
+ * (which is ambiguous when two copies are mapped). */
+static bool hook_d3d12core_mod(HMODULE core) {
+    if (o_CoreGetInterface) return true;
+    if (!core) core = GetModuleHandleA("D3D12Core.dll");
+    if (!core) return false;
+    void *fn = (void *)GetProcAddress(core, "D3D12GetInterface");
+    if (!fn) { rgpu_log("D3D12Core %p has no D3D12GetInterface export?!", (void *)core); return false; }
+    if (InterlockedCompareExchange(&g_core_hooked, 1, 0) != 0) return true;
+    /* Non-frozen inline hook: we install this at the moment D3D12Core loads (via the
+     * DLL-load notification), before ANY thread has called D3D12GetInterface, so there
+     * is nothing executing in the target to race with. */
+    arm_inline_once(fn, (void *)h_CoreGetInterface, (void **)&o_CoreGetInterface, "D3D12Core!D3D12GetInterface");
+    rgpu_log("D3D12Core HOOK %s: module=%p D3D12GetInterface @ %p trampoline=%p",
+             o_CoreGetInterface ? "installed" : "FAILED", (void *)core, fn, (void *)o_CoreGetInterface);
+    return o_CoreGetInterface != nullptr;
+}
+static bool hook_d3d12core_now() { return hook_d3d12core_mod(nullptr); }
+/* Race-free capture: hook ntdll!LdrLoadDll - EVERY module load funnels through it,
+ * including the Agility loader's private D3D12Core mapping (which bypasses
+ * kernel32!LoadLibraryExW). When D3D12Core finishes loading we hook its
+ * D3D12GetInterface using the EXACT base LdrLoadDll just returned, before the caller
+ * (the Agility bootstrap) proceeds to invoke it. */
+typedef struct _RGPU_UNICODE_STRING { USHORT Length; USHORT MaximumLength; PWSTR Buffer; } RGPU_UNICODE_STRING;
+static bool uname_is_d3d12core(const RGPU_UNICODE_STRING *u) {
+    if (!u || !u->Buffer) return false;
+    size_t len = u->Length / sizeof(wchar_t);
+    const wchar_t *b = u->Buffer, *want = L"d3d12core.dll"; const size_t wl = 13;
+    if (len < wl) return false;
+    const wchar_t *tail = b + (len - wl);
+    for (size_t i = 0; i < wl; i++) { wchar_t c = tail[i]; if (c >= L'A' && c <= L'Z') c = (wchar_t)(c - L'A' + L'a'); if (c != want[i]) return false; }
+    if (len > wl) { wchar_t p = tail[-1]; if (p != L'\\' && p != L'/') return false; }
+    return true;
+}
+/* ntdll DLL-load notification: the documented, hook-free way to observe module loads.
+ * The callback fires synchronously while the loader still holds control (before
+ * LdrLoadDll returns to the Agility bootstrap), giving us the D3D12Core base address so
+ * we hook its D3D12GetInterface BEFORE the bootstrap invokes it. No prologue decoding of
+ * the loader (LdrLoadDll's prologue is not relocatable by our conservative decoder). */
+typedef struct _RGPU_LDR_DLL_NOTIFICATION_DATA {
+    ULONG Flags;
+    const RGPU_UNICODE_STRING *FullDllName;
+    const RGPU_UNICODE_STRING *BaseDllName;
+    PVOID DllBase;
+    ULONG SizeOfImage;
+} RGPU_LDR_DLL_NOTIFICATION_DATA;
+typedef VOID (CALLBACK *PRGPU_LDR_NOTIFY)(ULONG, const RGPU_LDR_DLL_NOTIFICATION_DATA *, PVOID);
+typedef LONG (NTAPI *fnLdrRegisterDllNotification)(ULONG, PRGPU_LDR_NOTIFY, PVOID, PVOID *);
+static PVOID g_ldr_cookie = nullptr;
+static VOID CALLBACK rgpu_ldr_notify(ULONG reason, const RGPU_LDR_DLL_NOTIFICATION_DATA *data, PVOID) {
+    /* reason 1 = LDR_DLL_NOTIFICATION_REASON_LOADED */
+    if (reason == 1 && data && data->DllBase && !o_CoreGetInterface && uname_is_d3d12core(data->BaseDllName)) {
+        rgpu_log("DLL-notify: D3D12Core LOADED base=%p; hooking D3D12GetInterface before first use", data->DllBase);
+        hook_d3d12core_mod((HMODULE)data->DllBase);
+    }
+}
+static void install_ldrloaddll_hook() {
+    if (g_ldr_cookie) return;
+    HMODULE nt = GetModuleHandleA("ntdll.dll");
+    fnLdrRegisterDllNotification reg = nt ? (fnLdrRegisterDllNotification)GetProcAddress(nt, "LdrRegisterDllNotification") : nullptr;
+    if (!reg) { rgpu_log("LdrRegisterDllNotification unavailable; relying on poll fallback"); return; }
+    LONG st = reg(0, rgpu_ldr_notify, nullptr, &g_ldr_cookie);
+    rgpu_log("LdrRegisterDllNotification -> st=0x%08lX cookie=%p (catches the Agility D3D12Core load)",
+             (unsigned long)st, g_ldr_cookie);
+}
+static DWORD WINAPI rgpu_core_watcher(LPVOID) {
+    hook_d3d12core_now();              /* in case it was already mapped before we hooked */
+    for (int i = 0; i < 4000 && !o_CoreGetInterface; i++) Sleep(15);   /* keep alive as fallback */
+    if (!o_CoreGetInterface) rgpu_log("core-watcher: D3D12Core!D3D12GetInterface never hooked within timeout");
+    return 0;
+}
+
 extern "C" __declspec(dllexport) void WINAPI rgpu_d3d12_arm_external_device(ID3D12Device *dev, const char *source) {
     rgpu_log("external device arm source=%s device=%p vtbl=%p",
              source ? source : "unknown", (void *)dev, dev ? *(void **)dev : nullptr);
@@ -484,6 +734,14 @@ BOOL WINAPI DllMain(HINSTANCE, DWORD reason, LPVOID) {
                  RGPU_SLOT_Queue_ExecuteCommandLists, RGPU_SLOT_GCL_DrawInstanced, RGPU_SLOT_GCL_DrawIndexedInstanced,
                  RGPU_SLOT_GCL_Dispatch, RGPU_SLOT_GCL_ResourceBarrier, RGPU_SLOT_GCL_ClearRenderTargetView,
                  RGPU_SLOT_GCL_OMSetRenderTargets, RGPU_SLOT_GCL_CopyResource, RGPU_SLOT_GCL_Close, RGPU_SLOT_Factory_CreateDevice);
+        /* Hook ntdll!LdrLoadDll NOW (synchronously, before the game calls any d3d12
+         * export that triggers the Agility D3D12Core auto-load) so we catch that load
+         * and hook D3D12Core!D3D12GetInterface - the real device-creation entry point
+         * for UE5 titles like TXR - before its first use. The watcher is only a
+         * best-effort fallback for the already-loaded case. */
+        install_ldrloaddll_hook();
+        HANDLE w = CreateThread(nullptr, 0, rgpu_core_watcher, nullptr, 0, nullptr);
+        if (w) CloseHandle(w);
     }
     return TRUE;
 }
@@ -502,7 +760,14 @@ __declspec(dllexport) HRESULT WINAPI D3D12CreateDevice(IUnknown *pAdapter, D3D_F
              (unsigned long)riid.Data1, (unsigned)riid.Data2, (unsigned)riid.Data3, (unsigned)fl,
              warp ? "WARP" : "hardware", (unsigned long)hr, ppDevice ? *ppDevice : nullptr,
              (ppDevice && *ppDevice) ? *(void **)*ppDevice : nullptr);
-    if (SUCCEEDED(hr) && ppDevice && *ppDevice && !warp) arm_from_device((ID3D12Device *)*ppDevice, "D3D12CreateDevice");
+    /* Wrap every real (non-WARP) device. NOTE: the `fl` argument is D3D12CreateDevice's
+     * MINIMUM feature level (a floor), NOT the device's capability - TXR passes
+     * FL_1_0_CORE (0x1000) as the floor yet the created device is a full 12_x device it
+     * renders with. Gating on fl would wrongly skip the real device. */
+    if (SUCCEEDED(hr) && ppDevice && *ppDevice && !warp) {
+        void *raw = *ppDevice; *ppDevice = rgpu_wrap_device(raw, riid);
+        rgpu_log("  -> returned RgpuD3D12Device wrapper %p over real %p (FL floor 0x%X, game now holds OUR device)", *ppDevice, raw, (unsigned)fl);
+    }
     return hr;
 }
 __declspec(dllexport) HRESULT WINAPI D3D12GetDebugInterface(REFIID riid, void **ppvDebug) {
@@ -528,19 +793,11 @@ __declspec(dllexport) HRESULT WINAPI D3D12GetInterface(REFCLSID rclsid, REFIID r
     fn_t fn = (fn_t)real("D3D12GetInterface");
     if (!fn) return E_NOTIMPL;
     HRESULT hr = fn(rclsid, riid, ppvDebug);
-    if (SUCCEEDED(hr) && ppvDebug && *ppvDebug) {
-        /* The normal Agility path is:
-         * D3D12GetInterface(CLSID_D3D12SDKConfiguration, IID_ID3D12SDKConfiguration1)
-         *   -> ID3D12SDKConfiguration1::CreateDeviceFactory
-         *   -> ID3D12DeviceFactory::CreateDevice.
-         * Hook the intermediate SDKConfiguration1 object; checking only for a factory
-         * directly from D3D12GetInterface misses this documented path. */
-        if (IsEqualCLSID(rclsid, CLSID_D3D12SDKConfiguration))
-            hook_sdk_configuration(*ppvDebug);
-
-        /* Retain support for runtimes/tools that request a factory directly. */
-        hook_factory_object(*ppvDebug);
-    }
+    /* Normal Agility path via the app-level d3d12.dll:
+     * D3D12GetInterface(CLSID_D3D12SDKConfiguration, IID_ID3D12SDKConfiguration1)
+     *   -> ID3D12SDKConfiguration1::CreateDeviceFactory -> ID3D12DeviceFactory::CreateDevice.
+     * (TXR skips this and calls D3D12Core!D3D12GetInterface directly - see the core hook.) */
+    if (SUCCEEDED(hr)) rgpu_after_get_interface(rclsid, ppvDebug);
     return hr;
 }
 

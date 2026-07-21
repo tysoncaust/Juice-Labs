@@ -17,20 +17,21 @@ proxy-d3d11/test/*.dll
 *.o
 *.obj
 
-# D3D12 RE scratch/diagnostics (kept locally, not in repo)
-rgpu/proxy-d3d12/*.py
-rgpu/proxy-d3d12/apply_*.ps1
-rgpu/proxy-d3d12/disassemble_*.ps1
-rgpu/proxy-d3d12/dump_*.ps1
-rgpu/proxy-d3d12/inspect_*.ps1
-rgpu/proxy-d3d12/map_*.ps1
-rgpu/proxy-d3d12/find_*.ps1
-rgpu/proxy-d3d12/copy_*.ps1
-rgpu/proxy-d3d12/build_ags_early.ps1
-rgpu/proxy-d3d12/test_txr_*.ps1
+# D3D12 RE scratch/diagnostics (kept locally, not in repo). Paths are relative to
+# this .gitignore (rgpu/), so NO leading `rgpu/` - keep the real generator (tools/) tracked.
+proxy-d3d12/*.py
+proxy-d3d12/apply_*.ps1
+proxy-d3d12/disassemble_*.ps1
+proxy-d3d12/dump_*.ps1
+proxy-d3d12/inspect_*.ps1
+proxy-d3d12/map_*.ps1
+proxy-d3d12/find_*.ps1
+proxy-d3d12/copy_*.ps1
+proxy-d3d12/build_ags_early.ps1
+proxy-d3d12/test_txr_*.ps1
 *.bak-*
-rgpu/proxy-d3d12/test/*.txt
-rgpu/proxy-d3d12/test/*.json
-rgpu/proxy-d3d12/test/*.log
-rgpu/proxy-d3d12/src/rgpu_dxgi_early.cpp
-rgpu/proxy-d3d12/test/rgpu_ags_early_harness.cpp
+proxy-d3d12/test/*.txt
+proxy-d3d12/test/*.json
+proxy-d3d12/test/*.log
+proxy-d3d12/src/rgpu_dxgi_early.cpp
+proxy-d3d12/test/rgpu_ags_early_harness.cpp

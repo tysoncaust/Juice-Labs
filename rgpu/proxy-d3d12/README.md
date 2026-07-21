@@ -6,82 +6,111 @@ frontend. It follows the incremental sequence: **transparent pass-through first,
 serialize + remote later.**
 
 ## Status
+
 - [x] **Step 1 — transparent pass-through proxy** (`src/rgpu_d3d12_proxy.cpp`).
-      A `d3d12.dll` placed next to the game exports the loader surface a D3D12 game
-      imports (`D3D12CreateDevice`, `D3D12GetInterface`, `D3D12GetDebugInterface`,
+      A `d3d12.dll` next to the game exports the loader surface a D3D12 game imports
+      (`D3D12CreateDevice`, `D3D12GetInterface`, `D3D12GetDebugInterface`,
       `D3D12Serialize*RootSignature`, `D3D12Create*RootSignatureDeserializer`,
-      `D3D12EnableExperimentalFeatures`) and forwards each to `System32\d3d12.dll`,
-      logging the device-creation calls. **Agility SDK preserved**: because the
-      forward goes to the system d3d12.dll, its loader still reads the EXE's
-      `D3D12SDKVersion`/`D3D12SDKPath` exports and boots the game's own
-      `D3D12\...\D3D12Core.dll` — we never touch it.
-      **Verified:** Tokyo Xtreme Racer boots unchanged on native D3D12 through this
-      proxy — ATTACH logged, 4× `D3D12CreateDevice` (FL 12_0) returned S_OK through
-      us, game reached a responsive rendering state (GPU 3D ~93%, ~2.7 GB VRAM).
+      `D3D12EnableExperimentalFeatures`) and forwards each to `System32\d3d12.dll`.
+      Because the forward goes to the system d3d12.dll, the Agility SDK loader still
+      reads the EXE's `D3D12SDKVersion`/`D3D12SDKPath` and boots the game's own
+      `D3D12\...\D3D12Core.dll`. **Verified:** Tokyo Xtreme Racer boots unchanged.
 
-- [x] **Step 2 — command-stream tee via in-place vtable hooking** (`src/rgpu_d3d12_proxy.cpp`
-      + `src/rgpu_d3d12_slots.cpp`). D3D12 has no immediate context, so we hook (PIX/
-      RenderDoc-style) the shared vtables of `ID3D12CommandQueue::ExecuteCommandLists`
-      (submission boundary) and the `ID3D12GraphicsCommandList` recording slots
-      (Draw/DrawIndexed/Dispatch/ResourceBarrier/Clear*/OMSetRenderTargets/Copy/Close),
-      arming from the game's real objects via its create methods (`CreateCommandQueue`,
-      `CreateCommandQueue1`, `CreateCommandList`, `CreateCommandList1`) so the Agility
-      path is covered. Slot indices are derived authoritatively from the SDK's own C
-      `*Vtbl` structs (`rgpu_d3d12_slots.cpp`), not hand-counted. Each hook records the
-      call into the rgpu protocol, then calls the original — game runs unchanged.
-      **Verified by `test/rgpu_d3d12_harness.cpp`:** a controlled process submits a
-      clear-with-barriers list + a draw and the proxy tees `execs=1, barriers=2,
-      clears=1, draws=1, setRT=1` into a protocol batch. In **Tokyo Xtreme Racer** the
-      hooks reach the live game (our patched command-list `Close` hook fires every
-      frame), proving the vtable hooking works on the real AAA UE5 title.
+- [x] **Full D3D12 COM wrapper object-graph** (`src/rgpu_d3d12_wrappers.h`,
+      generated forwarders `src/rgpu_d3d12_wrappers_gen.h` from
+      `tools/gen_wrappers.py`). The deterministic interceptor: `D3D12CreateDevice` (and
+      the Agility `ID3D12DeviceFactory::CreateDevice`) return an **`RgpuD3D12Device`**
+      wrapper instead of the raw device, so the holder cannot route around us.
+      - **Identity-preserving `QueryInterface`**: returns `this` for every supported
+        device revision (`ID3D12Device` .. `Device10`), verified against the real object,
+        never leaking a raw interface. `ID3D12CommandQueue` and
+        `ID3D12GraphicsCommandList` (.. `List7`) are wrapped the same way.
+      - **Wrap-on-create**: `CreateCommandQueue`/`CreateCommandQueue1`,
+        `CreateCommandList`/`CreateCommandList1` return wrapped queues/lists; `GetDevice`
+        on a queue/list returns the device wrapper.
+      - **Capture at the natural boundaries**: the list wrapper tees each recording call
+        (Draw/DrawIndexed/Dispatch/DispatchMesh/ExecuteIndirect/Barrier/enhanced-Barrier/
+        Clear/OMSetRT/Copy) into the rgpu protocol; `Close` finalizes; the queue wrapper
+        tees + submits at `ExecuteCommandLists`, first **unwrapping** each list (via a
+        private IID) back to the real object so the runtime receives real command lists.
+      - **ABI-correct**: built with `WIDL_EXPLICIT_AGGREGATE_RETURNS` so aggregate-return
+        vtable slots (`GetAdapterLuid`/`GetResourceAllocationInfo`/`GetCustomHeapProperties`)
+        use the hidden `*__ret` pointer form that matches the MSVC-built D3D12Core exactly.
+      - **~191 forwarders** are generated from the toolchain's own `d3d12.h` (regenerated
+        each build) so vtable layout + ABI always match the compiler.
+      - **Verified end-to-end by `test/rgpu_d3d12_harness.cpp`**: a controlled process
+        creates a device via the proxy (→ wrapper), builds a clear-with-barriers list + a
+        draw on wrapped objects, submits via the wrapped queue — which unwraps and submits
+        the **real** list, the fence signals — and the proxy tees `execs=1 barriers=2
+        clears=1 draws=1` through the wrapper. This proves the whole wrapper path
+        (identity, wrap-on-create, unwrap-at-submit, ABI) is correct.
 
-- [x] **Inline-hook hardening** (`src/rgpu_inlinehook.h`, `test/rgpu_inlinehook_test.cpp`).
-      A minimal, conservative x64 trampoline inline hooker: a 14-byte abs-JMP at the
-      function entry + a relocated prologue (RIP-relative disp32 / rel32 fixups, near-
-      target trampoline). It hooks the function BODY, so it SURVIVES a later vtable
-      re-patch by an overlay (UE4SS). Install is done with all other threads SUSPENDED
-      (MinHook-style) so writing live D3D12Core code pages can't corrupt a running
-      thread. **Verified in isolation:** the test proves the detour fires, the
-      trampoline calls the original, AND the hook survives a simulated vtable re-patch
-      (the UE4SS scenario). It also installs cleanly on live TXR D3D12Core functions
-      without destabilising the game (thread-freezing fixed an earlier boot-instability).
+- [x] **Agility D3D12Core interception** (`src/rgpu_d3d12_proxy.cpp`). Modern UE5+Agility
+      titles create their device **inside** their shipped `D3D12Core.dll`, not through the
+      app-level `d3d12.dll` exports. We catch that reliably:
+      - `LdrRegisterDllNotification` (documented, hook-free) fires the instant D3D12Core
+        loads; we inline-hook its single export `D3D12Core!D3D12GetInterface` at the exact
+        module base **before its first use** (winning the load race that polling and
+        `kernel32!LoadLibraryExW` hooks lost — the Agility loader maps a private copy and
+        loads via `LdrLoadDll`, whose prologue our conservative decoder can't relocate).
+      - From `D3D12GetInterface` we hook the returned object **by type** (QI for
+        `ID3D12SDKConfiguration1` / `ID3D12DeviceFactory`, not by hard-coded CLSID) and
+        wrap any device the factory route creates.
 
-      *TXR live-capture status (honest):* the tee mechanism + inline hardening are
-      proven, but **full TXR capture is NOT achieved**. Live diagnosis showed our
-      D3D12CreateDevice export IS called (4x) and we successfully hook that device's
-      vtable — yet NONE of its methods (`CheckFeatureSupport`, `CreateCommandQueue`/`1`,
-      `CreateCommandList`/`1`) ever fire while the game renders at ~110% GPU. Those 4
-      devices are throwaway feature-probes; TXR's real UE5 RHI device is created +
-      used through a path that bypasses the objects we intercept. Resolving it needs
-      live debugging (WinDbg breakpoints on `D3D12Core!CheckFeatureSupport`) to find
-      the real device object, or the deterministic-but-large full `ID3D12Device` COM
-      wrapper (returned from our `D3D12CreateDevice`, all versioned interfaces) so the
-      game holds OUR object and can't route around us. That is the remaining work.
+### TXR live-capture — honest status (NOT achieved) and the exact reason
 
-## Remaining (step 2+ — the D3D12 body, in order)
-D3D12 has no immediate context; work is recorded into command lists and submitted
-through command queues, so wrapping only `ID3D12Device` is insufficient.
-1. **Wrap the execution objects** (identity-preserving): `ID3D12Device` + every
-   version requested via `QueryInterface`, `ID3D12CommandQueue`,
-   `ID3D12CommandAllocator`, `ID3D12GraphicsCommandList` (+ later versions),
-   `ID3D12Resource`, `ID3D12DescriptorHeap`, `ID3D12Fence`, `ID3D12PipelineState`,
-   `ID3D12RootSignature`, and the DXGI factory/swap-chain. One wrapper identity per
-   real object; `QueryInterface` returns the wrapper for all supported IIDs; wrap
-   objects returned by `GetDevice`/`GetBuffer` etc. (UE5 queries newer revisions —
-   returning a raw one bypasses the interceptor).
-2. **Translate D3D12 handles** to protocol representations: GPU VA -> resource id +
-   offset; CPU/GPU descriptor handle -> heap id + index; COM pointer -> object id;
-   mapped memory -> uploaded byte ranges; fence -> queue/fence id + value. Capture
-   upload-heap `Map`/`Unmap` writes and transfer modified ranges before the command
-   list that references them executes.
-3. **Serialize at submission**: `ID3D12CommandQueue::ExecuteCommandLists` is the
-   boundary. Record while the app builds each command list, finalize on `Close`,
-   submit remotely on `ExecuteCommandLists`; preserve queue type, ordering, fence
-   signals/waits, and resource barriers.
-4. **Diagnostics** (before device creation): enable DRED; log every requested
-   device/interface IID, `CheckFeatureSupport` results, list close/submit, fence
-   signal/wait, `Present` results, `GetDeviceRemovedReason`, and DRED breadcrumbs +
-   page-fault output on failure (Present can return DEVICE_REMOVED/RESET).
-5. **Remote**: D3D12 tee -> local replay -> **remote Windows D3D12** backend
-   (substantially more practical for SM6 than Linux Vulkan) -> Linux Vulkan LAST
-   (a full DXIL/SM6 + descriptor/barrier/PSO translation project of its own).
+The wrapper is complete and proven (harness), and the D3D12Core interception fires
+reliably, but **Tokyo Xtreme Racer's per-frame command stream is not yet captured.**
+Root cause, established by live diagnosis:
+
+- TXR (UE5 + Agility SDK **1.614**) creates its real device through a **private,
+  undocumented D3D12Core bootstrap interface**: `D3D12Core!D3D12GetInterface(CLSID
+  {AFEE8EAE-417D-4AC1-99A6-BDEE414E4DA2}, IID {DFAFDD2C-355F-4CB3-A8B2-EA7F9260148B})`
+  returns an internal object that exposes **no public D3D12 interface**. Its vtable
+  **slot 7** is the device factory (identified empirically: it emits heap `ID3D12Device`
+  objects, one per `D3D12CreateDevice`).
+- That slot is called **by D3D12Core itself** (`caller = D3D12Core.dll+0x79A5D`), and the
+  devices it produces are consumed by **concrete D3D12Core / d3d12.dll internal code that
+  reads non-COM fields at fixed offsets**. Wrapping the device there **crashes the game**
+  (a COM wrapper doesn't provide the internal layout). Confirmed: observe-only is stable
+  (116% GPU), wrapping-there is not.
+- The devices that *do* reach the public `D3D12CreateDevice` (all four, `fl=0x1000` =
+  `FL_1_0_CORE` **floor**, not a capability) get **0 `QueryInterface` and 0 command-queue
+  creations** on our wrapper (`DEVICE QI HIT=0`, `DEVICE QI LEAK=0`, `wrapped-queue=0`) —
+  proving they are internal capability probes, not UE5's render device. UE5's render
+  device is created and used **entirely within the D3D12Core/d3d12.dll boundary** and
+  never surfaces as a pure-COM `ID3D12Device` through any public entry a proxy can wrap.
+
+**Note on the `fl` argument:** `D3D12CreateDevice`'s feature-level parameter is the
+*minimum* (a floor), not the device's capability. A device made with a `FL_1_0_CORE`
+floor on a 12_x GPU is still a full device — so the frontend wraps **every** non-WARP
+device returned, regardless of `fl` (an earlier `fl >= 11_0` gate wrongly skipped it).
+
+## Remaining work (to capture TXR specifically)
+
+1. **Reach UE5's private-path device at a COM-only boundary.** Options, hardest part
+   first: (a) hook `system d3d12.dll`'s internal device dispatch so the object UE5
+   receives is ours while D3D12Core keeps the raw one it constructed; (b) instead of a
+   COM wrapper at slot 7, vtable-hook the produced device's *own* command-creation slots
+   (Draw/queue/list) so capture works without replacing the object the runtime uses; this
+   sidesteps the internal-layout problem the wrapper hit.
+2. **Cover `ID3D12Device11-14` / `GraphicsCommandList8-10`** for the wrapper's QI by
+   vendoring Microsoft's MIT-licensed DirectX-Headers (mingw's max is `Device10`) so no
+   raw revision can ever leak on a recent Agility SDK. (Not currently the blocker — TXR
+   showed **0** device-QI leaks — but required for correctness on titles that do QI newer
+   revisions.)
+3. **Handle translation + remote** (the rgpu step-2 body, unchanged): GPU VA → resource
+   id+offset; CPU/GPU descriptor handle → heap id+index; COM ptr → object id; mapped
+   memory → uploaded byte ranges; fence → queue/fence id+value. Then D3D12 tee → local
+   replay → **remote Windows D3D12** backend (far more practical for SM6 than Linux
+   Vulkan) → Linux Vulkan last. A remote Windows D3D12 replay host is the fastest route
+   to a playable result and does not depend on cracking TXR's private device path.
+
+## Build / deploy
+
+`build_d3d12.ps1` regenerates the wrapper forwarders, builds `test\rgpu_d3d12.dll` +
+`test\rgpu_d3d12_harness.exe`, and runs the harness (the acceptance test — must print
+`RESULT: D3D12 command stream captured`). Deploy: copy `rgpu_d3d12.dll` next to a D3D12
+game's `.exe` as `d3d12.dll` (for TXR: `...\TokyoXtremeRacer\Binaries\Win64\d3d12.dll`),
+launch with **no** `-d3d11`, then read `%TEMP%\rgpu_d3d12.log`. Remove the DLL to restore
+the game.
