@@ -1,6 +1,0 @@
-﻿
-C:\Windows\System32\d3d12.dll:     file format pei-x86-64
-
-Contents of section .rdata:
- 1800172e8 700501d5 9a69df47 8e118e5a 334b01ca  p....i.G...Z3K..
- 1800172f8 00000000 00000000 ffffffff ffffffff  ................
