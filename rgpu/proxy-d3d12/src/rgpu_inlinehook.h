@@ -49,12 +49,26 @@ static inline rgpu_insn rgpu_x64_decode(const uint8_t *p) {
         case 0x90:                                     /* nop */
         case 0xC3:                                     /* ret (ends flow; still copyable) */
             break;
+        case 0x84: case 0x85:                          /* test r/m, r */
         case 0x88: case 0x89: case 0x8A: case 0x8B:    /* mov r/m<->r */
         case 0x8D: case 0x63:                          /* lea / movsxd */
+        case 0x00: case 0x01: case 0x08: case 0x09:    /* add/or  r/m<->r */
+        case 0x30: case 0x31: case 0x32: case 0x33:    /* xor/... r/m<->r */
+        case 0x28: case 0x29: case 0x2A: case 0x2B:    /* sub     r/m<->r */
             modrm(); break;
         case 0x0F: {
             uint8_t op2 = p[i++];
-            if (op2 == 0x1E || op2 == 0x1F) modrm();    /* endbr64/32, multi-byte nop */
+            /* endbr64/32 + multi-byte nop, plus common SSE/SSE2 reg/mem instructions
+             * (op2 + ModRM, no immediate) that appear in MSVC prologues: movups/movss,
+             * movaps, ucomiss, and/andn/or/xorps, add/mul/sub/div ps, movd/movq/movdqa,
+             * movq, pxor. These are position-independent (modrm() flags any RIP-rel). */
+            if (op2 == 0x1E || op2 == 0x1F ||
+                op2 == 0x10 || op2 == 0x11 || op2 == 0x28 || op2 == 0x29 ||
+                op2 == 0x2E || op2 == 0x2F || op2 == 0x54 || op2 == 0x55 ||
+                op2 == 0x56 || op2 == 0x57 || op2 == 0x58 || op2 == 0x59 ||
+                op2 == 0x5C || op2 == 0x5E || op2 == 0x6E || op2 == 0x6F ||
+                op2 == 0x7E || op2 == 0x7F || op2 == 0xD6 || op2 == 0xEF)
+                modrm();
             else bad = true;
             break;
         }

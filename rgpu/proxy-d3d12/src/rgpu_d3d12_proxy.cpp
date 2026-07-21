@@ -24,6 +24,7 @@
 #include <tlhelp32.h>
 #include <psapi.h>
 #include <d3d12.h>
+#include <d3d11.h>
 #include <dxgi.h>
 #include <dxgi1_2.h>
 #include <cstdio>
@@ -594,20 +595,40 @@ static HRESULT STDMETHODCALLTYPE sh_DevCCQ1(ID3D12Device9 *T, const D3D12_COMMAN
 static HRESULT STDMETHODCALLTYPE sh_DevCCL(ID3D12Device *T, UINT nm, D3D12_COMMAND_LIST_TYPE ty, ID3D12CommandAllocator *a, ID3D12PipelineState *ps, REFIID r, void **pp) { HRESULT hr=o_sh_DevCCL(T,nm,ty,a,ps,r,pp); if(SUCCEEDED(hr)&&pp&&*pp) shadow_patch_list_from_any(*pp); return hr; }
 static HRESULT STDMETHODCALLTYPE sh_DevCCL1(ID3D12Device4 *T, UINT nm, D3D12_COMMAND_LIST_TYPE ty, D3D12_COMMAND_LIST_FLAGS f, REFIID r, void **pp) { HRESULT hr=o_sh_DevCCL1(T,nm,ty,f,r,pp); if(SUCCEEDED(hr)&&pp&&*pp) shadow_patch_list_from_any(*pp); return hr; }
 
-/* Device: intercept queue/list creation on the canonical device vtable so we reach the
- * real game-used queues/lists that carry the per-frame command stream. */
+/* Hook a device create-method by INLINE-hooking its implementation function (read from
+ * the vtable slot) rather than the vtable slot itself. This catches BOTH public callers
+ * (vtable slot -> impl -> our inline hook) AND internal callers that jump straight to the
+ * impl (D3D11On12 / d3d12.dll create queues without calling the public COM method), and it
+ * is immune to the runtime restoring the object's vtable pointer. Falls back to a canonical
+ * vtable patch if the impl prologue is not relocatable by our conservative decoder. */
+static void hook_dev_method(ID3D12Device *dev, unsigned slot, void *detour, void **orig, const char *name) {
+    if (*orig) return;
+    void **vt = *(void ***)dev;
+    void *impl = vt[slot];
+    HookItem it[1] = {{ impl, detour, orig, name }};
+    install_batch_frozen(it, 1);              /* inline-hook the impl (thread-frozen) */
+    if (!*orig) {
+        unsigned char *b = (unsigned char *)impl;
+        rgpu_log("%s inline aborted; impl=%p prologue %02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X",
+                 name, impl, b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]);
+        patch_canonical(dev, slot, detour, orig);
+    }
+}
+/* Device: intercept queue/list creation so we reach the real game-used queues/lists that
+ * carry the per-frame command stream - including internally-created ones. */
 static void shadow_patch_device(void *devPtr) {
     if (!devPtr) return;
     ID3D12Device *dev = nullptr;
     if (FAILED(((IUnknown *)devPtr)->QueryInterface(__uuidof(ID3D12Device), (void **)&dev)) || !dev) return;
     if (!o_sh_DevCCQ) {
-        patch_canonical(dev, RGPU_SLOT_Device_CheckFeatureSupport,  (void *)h_CFS,      (void **)&o_CFS); /* diag: proves the patch persists + device is used */
-        patch_canonical(dev, RGPU_SLOT_Device_CreateCommandQueue,   (void *)sh_DevCCQ,  (void **)&o_sh_DevCCQ);
-        patch_canonical(dev, RGPU_SLOT_Device_CreateCommandList,    (void *)sh_DevCCL,  (void **)&o_sh_DevCCL);
-        ID3D12Device4 *d4=nullptr; if (SUCCEEDED(dev->QueryInterface(__uuidof(ID3D12Device4),(void**)&d4))&&d4){ patch_canonical(d4, RGPU_SLOT_Device4_CreateCommandList1,(void*)sh_DevCCL1,(void**)&o_sh_DevCCL1); d4->Release(); }
-        ID3D12Device9 *d9=nullptr; if (SUCCEEDED(dev->QueryInterface(__uuidof(ID3D12Device9),(void**)&d9))&&d9){ patch_canonical(d9, RGPU_SLOT_Device9_CreateCommandQueue1,(void*)sh_DevCCQ1,(void**)&o_sh_DevCCQ1); d9->Release(); }
+        patch_canonical(dev, RGPU_SLOT_Device_CheckFeatureSupport, (void *)h_CFS, (void **)&o_CFS); /* diag */
+        hook_dev_method(dev, RGPU_SLOT_Device_CreateCommandQueue,   (void *)sh_DevCCQ,  (void **)&o_sh_DevCCQ,  "CreateCommandQueue impl");
+        hook_dev_method(dev, RGPU_SLOT_Device_CreateCommandList,    (void *)sh_DevCCL,  (void **)&o_sh_DevCCL,  "CreateCommandList impl");
+        hook_dev_method(dev, RGPU_SLOT_Device4_CreateCommandList1,  (void *)sh_DevCCL1, (void **)&o_sh_DevCCL1, "CreateCommandList1 impl");
+        hook_dev_method(dev, RGPU_SLOT_Device9_CreateCommandQueue1, (void *)sh_DevCCQ1, (void **)&o_sh_DevCCQ1, "CreateCommandQueue1 impl");
         if (InterlockedIncrement(&g_sh_devices) == 1)
-            rgpu_log("patched canonical DEVICE vtable create-queue/list (survives vtable restore; game keeps its object)");
+            rgpu_log("hooked DEVICE create-queue/list impls (public + internal callers; CCQ=%p CCL=%p CCL1=%p CCQ1=%p)",
+                     (void *)o_sh_DevCCQ, (void *)o_sh_DevCCL, (void *)o_sh_DevCCL1, (void *)o_sh_DevCCQ1);
     }
     dev->Release();
 }
@@ -620,6 +641,37 @@ static void shadow_patch_device(void *devPtr) {
 extern "C" {
 extern unsigned RGPU_SLOT_DXGIFactory_CreateSwapChain,
     RGPU_SLOT_DXGIFactory2_CreateSwapChainForHwnd, RGPU_SLOT_DXGIFactory2_CreateSwapChainForComposition;
+}
+/* If TXR presents via D3D11On12, its rendering may be D3D11 immediate-context draws that
+ * D3D11On12 translates to D3D12 internally (which is why no public D3D12 queue/list is
+ * ever created). Probe the present D3D11 device's immediate context: hook Draw(13) /
+ * DrawIndexed(12). If they fire, the game renders via D3D11 - and we capture it there. */
+typedef void (STDMETHODCALLTYPE *fnD11Draw)(ID3D11DeviceContext *, UINT, UINT);
+typedef void (STDMETHODCALLTYPE *fnD11DrawIndexed)(ID3D11DeviceContext *, UINT, UINT, INT);
+static fnD11Draw o_D11Draw = nullptr; static fnD11DrawIndexed o_D11DrawIndexed = nullptr;
+static void STDMETHODCALLTYPE h_D11Draw(ID3D11DeviceContext *c, UINT vc, UINT sv) {
+    if (InterlockedIncrement(&g_draws) == 1) rgpu_log("D3D11 Draw fired -> TXR renders via D3D11On12; capturing at the D3D11 layer");
+    rgpu_args_draw a{vc, sv, 1, 0}; tee(RGPU_CMD_DRAW, oid(c), &a, sizeof(a));
+    o_D11Draw(c, vc, sv);
+}
+static void STDMETHODCALLTYPE h_D11DrawIndexed(ID3D11DeviceContext *c, UINT ic, UINT si, INT bv) {
+    if (InterlockedIncrement(&g_draws) == 1) rgpu_log("D3D11 DrawIndexed fired -> TXR renders via D3D11On12; capturing at the D3D11 layer");
+    rgpu_args_draw_indexed a{ic, si, bv, 1, 0}; tee(RGPU_CMD_DRAW_INDEXED, oid(c), &a, sizeof(a));
+    o_D11DrawIndexed(c, ic, si, bv);
+}
+static volatile LONG g_d11_probed = 0;
+static void probe_d3d11_context(IUnknown *pDevice) {
+    if (!pDevice || InterlockedCompareExchange(&g_d11_probed, 1, 0) != 0) return;
+    ID3D11Device *d11 = nullptr;
+    if (FAILED(pDevice->QueryInterface(__uuidof(ID3D11Device), (void **)&d11)) || !d11) { g_d11_probed = 0; return; }
+    ID3D11DeviceContext *ctx = nullptr; d11->GetImmediateContext(&ctx);
+    if (ctx) {
+        bool a = patch_slot(ctx, 12, (void *)h_D11DrawIndexed, (void **)&o_D11DrawIndexed);
+        bool b = patch_slot(ctx, 13, (void *)h_D11Draw, (void **)&o_D11Draw);
+        rgpu_log("hooked D3D11On12 immediate-context %p Draw=%d DrawIndexed=%d (probe: does TXR render via D3D11?)", (void *)ctx, b, a);
+        ctx->Release();
+    }
+    d11->Release();
 }
 static volatile LONG g_render_queue_found = 0;
 static void adopt_render_queue(IUnknown *pDevice) {
@@ -646,6 +698,7 @@ static void adopt_render_queue(IUnknown *pDevice) {
         bool is11 = SUCCEEDED(pDevice->QueryInterface(IID_ID3D11Device, &t)) && t; if (t) ((IUnknown*)t)->Release();
         rgpu_log("DXGI pDevice=%p vtbl=%p[%s] caller=%p[%s] QI(Queue)=0x%08lX isID3D11Device=%d - NOT a D3D12 queue",
                  (void *)pDevice, vt, vm, caller, cm, (unsigned long)hrq, is11);
+        if (is11) probe_d3d11_context(pDevice);   /* D3D11On12 present -> probe/capture D3D11 draws */
     }
 }
 typedef HRESULT (STDMETHODCALLTYPE *fnCreateSwapChain)(IUnknown *, IUnknown *, DXGI_SWAP_CHAIN_DESC *, IDXGISwapChain **);
@@ -714,34 +767,87 @@ static void install_dxgi_hooks() {
     rgpu_log("DXGI export hooks installed (CreateDXGIFactory/1/2) -> render-queue acquisition armed");
 }
 
-/* --- ID3D12CoreModule export-table CreateDevice interception --------------- */
-typedef HRESULT (WINAPI *fnCoreDispatchCreateDevice)(IUnknown *, D3D_FEATURE_LEVEL, unsigned char, const void *, uintptr_t, REFIID, void **);
-static fnCoreDispatchCreateDevice o_CoreTableCreateDevice = nullptr;
-static volatile LONG g_core_table_devices = 0;
-static HRESULT WINAPI h_CoreTableCreateDevice(IUnknown *adapter, D3D_FEATURE_LEVEL fl, unsigned char createFlag,
-                                              const void *ctx, uintptr_t mode, REFIID riid, void **ppDevice) {
-    HRESULT hr = o_CoreTableCreateDevice(adapter, fl, createFlag, ctx, mode, riid, ppDevice);
-    if (SUCCEEDED(hr) && ppDevice && *ppDevice) {
-        LONG d = InterlockedIncrement(&g_core_table_devices);
-        rgpu_log("CORE_TABLE[0] CreateDevice #%ld fl=0x%X -> device=%p vtbl=%p (patching in place)",
-                 d, (unsigned)fl, *ppDevice, *(void **)*ppDevice);
-        shadow_patch_device(*ppDevice);   /* in place - return the UNCHANGED pointer */
-    }
-    return hr;
+/* --- ID3D12CoreModule export-table interception ----------------------------
+ * The export table (from GetDllExports / the versioned {FC454290} slot 11) is D3D12Core's
+ * internal dispatch: entry 0 is CreateDevice, and other entries are the internal
+ * command-queue / command-list creators the runtime + D3D11On12 invoke DIRECTLY (TXR never
+ * calls the public ID3D12Device COM methods). We hook every code-pointer entry with a
+ * generic 8-arg forwarder (safe superset on Win64) that snapshots each pointer arg before
+ * the call and, after, canonical-patches any FRESHLY-created queue/list/device found in an
+ * out-param - reaching the real render queue/lists regardless of how they are made. Once a
+ * queue AND a list are found we restore the table to drop the steady-state overhead. */
+static bool looks_like_com(void *obj) {   /* real COM object with a D3D12Core vtable */
+    void *vt; if (!safe_read_ptr(obj, &vt)) return false;
+    uintptr_t v = (uintptr_t)vt; if (v < g_core_base || v >= g_core_end) return false;
+    void **vtbl = (void **)vt; void *f;
+    for (int s = 0; s < 3; s++) if (!safe_read_ptr(&vtbl[s], &f) || !is_code_ptr(f)) return false;
+    return true;   /* vtable in D3D12Core + QI/AddRef/Release are code pointers */
 }
-/* GetDllExports returns the export table; entry 0 is the real CreateDevice. Hook it. */
-static void hook_core_export_table(void *table) {
-    if (!table || o_CoreTableCreateDevice) return;
-    uint64_t *q = (uint64_t *)table;
-    void *entry0; if (!safe_read_ptr(&q[0], &entry0) || !is_code_ptr(entry0)) return;
+static uint64_t *g_cet_table = nullptr; static int g_cet_count = 0; static void *g_cet_orig[32];
+static volatile LONG g_cet_q = 0, g_cet_l = 0, g_cet_d = 0;
+static void restore_core_export_table() {
+    if (!g_cet_table || !g_cet_count) return;
     DWORD oldp = 0;
-    if (VirtualProtect(&q[0], sizeof(void *), PAGE_READWRITE, &oldp)) {
-        o_CoreTableCreateDevice = (fnCoreDispatchCreateDevice)entry0;
-        q[0] = (uint64_t)(uintptr_t)h_CoreTableCreateDevice;
-        DWORD ign = 0; VirtualProtect(&q[0], sizeof(void *), oldp, &ign);
-        FlushInstructionCache(GetCurrentProcess(), &q[0], sizeof(void *));
-        rgpu_log("CORE_EXPORT_TABLE[00] CreateDevice hooked: original=%p detour=%p", entry0, (void *)h_CoreTableCreateDevice);
+    if (VirtualProtect(g_cet_table, g_cet_count * sizeof(void *), PAGE_READWRITE, &oldp)) {
+        for (int i = 0; i < g_cet_count; i++) g_cet_table[i] = (uint64_t)(uintptr_t)g_cet_orig[i];
+        DWORD ign = 0; VirtualProtect(g_cet_table, g_cet_count * sizeof(void *), oldp, &ign);
+        FlushInstructionCache(GetCurrentProcess(), g_cet_table, g_cet_count * sizeof(void *));
     }
+    g_cet_count = 0;
+    rgpu_log("CORE_EXPORT_TABLE restored (queue+list captured; overhead removed)");
+}
+static void rgpu_cet_scan_out(int entry, void *created) {
+    IUnknown *u = (IUnknown *)created;
+    ID3D12CommandQueue *q = nullptr; ID3D12GraphicsCommandList *l = nullptr; ID3D12Device *d = nullptr;
+    if (SUCCEEDED(u->QueryInterface(__uuidof(ID3D12CommandQueue), (void **)&q)) && q) {
+        if (InterlockedIncrement(&g_cet_q) == 1) rgpu_log("CORE_EXPORT_TABLE[%d] produced a command QUEUE %p -> patching", entry, created);
+        shadow_patch_queue(q); q->Release();
+    } else if (SUCCEEDED(u->QueryInterface(__uuidof(ID3D12GraphicsCommandList), (void **)&l)) && l) {
+        if (InterlockedIncrement(&g_cet_l) == 1) rgpu_log("CORE_EXPORT_TABLE[%d] produced a command LIST %p -> patching", entry, created);
+        shadow_patch_list(l); l->Release();
+    } else if (SUCCEEDED(u->QueryInterface(__uuidof(ID3D12Device), (void **)&d)) && d) {
+        if (InterlockedIncrement(&g_cet_d) == 1) rgpu_log("CORE_EXPORT_TABLE[%d] produced a DEVICE %p -> patching", entry, created);
+        shadow_patch_device(created); d->Release();
+    }
+    if (g_cet_d || (g_cet_q && g_cet_l)) restore_core_export_table();   /* device found via entry 0; queues aren't module exports */
+}
+typedef uint64_t (WINAPI *rgpu_cet_fn)(void *, void *, void *, void *, void *, void *, void *, void *);
+static uint64_t rgpu_cet_dispatch(int i, void *a0, void *a1, void *a2, void *a3, void *a4, void *a5, void *a6, void *a7) {
+    void *args[8] = {a0, a1, a2, a3, a4, a5, a6, a7}; void *before[8];
+    for (int k = 0; k < 8; k++) if (!safe_read_ptr(args[k], &before[k])) before[k] = (void *)~(uintptr_t)0;
+    uint64_t r = ((rgpu_cet_fn)g_cet_orig[i])(a0, a1, a2, a3, a4, a5, a6, a7);
+    for (int k = 0; k < 8; k++) {
+        void *after;
+        if (safe_read_ptr(args[k], &after) && after != before[k] && looks_like_com(after)) rgpu_cet_scan_out(i, after);
+    }
+    return r;
+}
+#define CET_THUNK(n) static uint64_t WINAPI rgpu_cet_thunk_##n(void *a0, void *a1, void *a2, void *a3, void *a4, void *a5, void *a6, void *a7) { return rgpu_cet_dispatch(n, a0, a1, a2, a3, a4, a5, a6, a7); }
+CET_THUNK(0)  CET_THUNK(1)  CET_THUNK(2)  CET_THUNK(3)  CET_THUNK(4)  CET_THUNK(5)  CET_THUNK(6)  CET_THUNK(7)
+CET_THUNK(8)  CET_THUNK(9)  CET_THUNK(10) CET_THUNK(11) CET_THUNK(12) CET_THUNK(13) CET_THUNK(14) CET_THUNK(15)
+CET_THUNK(16) CET_THUNK(17) CET_THUNK(18) CET_THUNK(19) CET_THUNK(20) CET_THUNK(21) CET_THUNK(22) CET_THUNK(23)
+static void *g_cet_thunks[24] = {
+    (void *)rgpu_cet_thunk_0,(void *)rgpu_cet_thunk_1,(void *)rgpu_cet_thunk_2,(void *)rgpu_cet_thunk_3,
+    (void *)rgpu_cet_thunk_4,(void *)rgpu_cet_thunk_5,(void *)rgpu_cet_thunk_6,(void *)rgpu_cet_thunk_7,
+    (void *)rgpu_cet_thunk_8,(void *)rgpu_cet_thunk_9,(void *)rgpu_cet_thunk_10,(void *)rgpu_cet_thunk_11,
+    (void *)rgpu_cet_thunk_12,(void *)rgpu_cet_thunk_13,(void *)rgpu_cet_thunk_14,(void *)rgpu_cet_thunk_15,
+    (void *)rgpu_cet_thunk_16,(void *)rgpu_cet_thunk_17,(void *)rgpu_cet_thunk_18,(void *)rgpu_cet_thunk_19,
+    (void *)rgpu_cet_thunk_20,(void *)rgpu_cet_thunk_21,(void *)rgpu_cet_thunk_22,(void *)rgpu_cet_thunk_23,
+};
+static volatile LONG g_cet_hooked = 0;
+static void hook_core_export_table(void *table) {
+    if (!table || InterlockedCompareExchange(&g_cet_hooked, 1, 0) != 0) return;
+    uint64_t *q = (uint64_t *)table;
+    int count = 0;
+    for (int i = 0; i < 24; i++) { void *e; if (!safe_read_ptr(&q[i], &e) || !is_code_ptr(e)) break; count++; }
+    DWORD oldp = 0;
+    if (count && VirtualProtect(q, count * sizeof(void *), PAGE_READWRITE, &oldp)) {
+        for (int i = 0; i < count; i++) { g_cet_orig[i] = (void *)(uintptr_t)q[i]; q[i] = (uint64_t)(uintptr_t)g_cet_thunks[i]; }
+        DWORD ign = 0; VirtualProtect(q, count * sizeof(void *), oldp, &ign);
+        FlushInstructionCache(GetCurrentProcess(), q, count * sizeof(void *));
+        g_cet_table = q; g_cet_count = count;
+    }
+    rgpu_log("CORE_EXPORT_TABLE hooked %d entries (generic queue/list/device detection)", count);
 }
 typedef uintptr_t (STDMETHODCALLTYPE *fnCoreVersionedExports)(IUnknown *, void *);
 static fnCoreVersionedExports o_CoreVersioned11 = nullptr;

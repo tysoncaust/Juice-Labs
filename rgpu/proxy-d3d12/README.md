@@ -99,21 +99,39 @@ captured. The exact reason, from live diagnosis:
 not the device's capability — TXR passes `FL_1_0_CORE` (0x1000) yet the device is a full
 12_x device. Never gate on it.
 
-## Remaining work (to capture TXR specifically)
+### In-process interception is exhausted for TXR (every surface tried, all live)
 
-1. **Reach the internal queue.** The `ID3D12CoreModule` export table has ~18 entries
-   (entry 0 = `CreateDevice`); hook the others to find the **internal command-queue /
-   command-list / ExecuteCommandLists** entries the runtime and D3D11On12 use directly, and
-   canonical-patch the queues/lists they produce. Alternatively capture at the **D3D11On12**
-   layer (the game may be issuing D3D11 immediate-context draws that D3D11On12 translates to
-   D3D12) — hook `ID3D11DeviceContext` recording on the D3D11On12 device.
-2. **For a playable stream now:** acquire the present queue at swap-chain creation and
-   capture the back buffer at `Present` (video + input), which does **not** depend on
-   cracking the internal command path.
-3. **Handle translation + remote** (unchanged): GPU VA → resource id+offset; descriptor
-   handle → heap id+index; COM ptr → object id; mapped memory → byte ranges; fence →
-   queue/fence id+value. Then tee → local replay → **remote Windows D3D12** backend → Linux
-   Vulkan last.
+| Interception point | Implemented | Result |
+|---|---|---|
+| D3D12 public device vtable (`CreateCommandQueue`/`List`, `CheckFeatureSupport`) | canonical patch, verified live on all 4 devices | never called |
+| D3D12 `CreateCommandQueue`/`List` **impl** functions | inline-hooked (incl. a decoder extension for the `xorps` prologue so the CCQ impl hooks) — catches BOTH public and internal callers | never called |
+| `ID3D12CoreModule` export table (~18 entries) | generic 8-arg forwarders detecting queue/list/device out-params | only produces **devices** |
+| DXGI `CreateSwapChain*` `pDevice` | hooked | it is an **`ID3D11Device`** (D3D11On12), not a D3D12 queue |
+| `d3d11!D3D11On12CreateDevice` | inline-hooked | never called (d3d12.dll creates it internally) |
+| D3D11On12 immediate-context `Draw`/`DrawIndexed` | vtable-patched | never called |
+
+TXR's command stream is issued through **D3D12Core-internal constructors** that bypass
+every public COM method, implementation function, module export, and the D3D11 immediate
+context — beyond standard in-process COM/vtable/impl hooking.
+
+## Remaining options (to capture TXR specifically)
+
+1. **Deep D3D12Core binary RE** — disassemble the Agility `D3D12Core.dll` to locate its
+   internal command-queue / command-list constructors and `ExecuteCommandLists`, and hook
+   those functions directly. The only path that reaches the actual command stream, but it is
+   version-specific reverse engineering of a proprietary binary.
+2. **Present-based video capture** (playable now, not a command tee) — acquire the
+   presentation surface at swap-chain creation and copy the back buffer at `Present` for a
+   video + input stream. Independent of the internal command path.
+3. **Handle translation + remote** (unchanged, for whichever capture lands): GPU VA →
+   resource id+offset; descriptor handle → heap id+index; COM ptr → object id; mapped memory
+   → byte ranges; fence → queue/fence id+value. Then tee → local replay → **remote Windows
+   D3D12** backend → Linux Vulkan last.
+
+The CoreModule export-table route + canonical/impl in-place patching + DXGI/D3D11On12
+acquisition are correct and harness-verified; they capture titles that create command
+objects through any public or implementation-level entry point. TXR routes entirely through
+D3D12Core internals.
 
 ## Full D3D12 COM wrapper (harness-verified reference)
 
