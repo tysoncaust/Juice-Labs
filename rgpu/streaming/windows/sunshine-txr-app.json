@@ -1,0 +1,14 @@
+{
+  "name": "Tokyo Xtreme Racer",
+  "output": "",
+  "cmd": "\"C:\\Users\\email\\Desktop\\Tokyo Xtreme Racer - Remote.cmd\"",
+  "index": -1,
+  "exclude-global-prep-cmd": false,
+  "elevated": false,
+  "auto-detach": true,
+  "wait-all": true,
+  "exit-timeout": 5,
+  "prep-cmd": [],
+  "detached": [],
+  "image-path": ""
+}

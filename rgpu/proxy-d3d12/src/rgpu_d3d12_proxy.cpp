@@ -40,10 +40,13 @@ static HMODULE g_real = nullptr;
 
 /* ---------------- logging ------------------------------------------------- */
 static void rgpu_log(const char *fmt, ...) {
-    char dir[MAX_PATH];
-    DWORD n = GetTempPathA(MAX_PATH, dir);
-    if (!n || n >= MAX_PATH - 24) return;
-    std::strcat(dir, "rgpu_d3d12.log");
+    char dir[MAX_PATH * 4] = {};
+    DWORD n = GetEnvironmentVariableA("RGPU_LOG_PATH", dir, (DWORD)sizeof(dir));
+    if (!n || n >= sizeof(dir)) {
+        n = GetTempPathA(MAX_PATH, dir);
+        if (!n || n >= MAX_PATH - 24) return;
+        std::strcat(dir, "rgpu_d3d12.log");
+    }
     FILE *f = std::fopen(dir, "a");
     if (!f) return;
     SYSTEMTIME t; GetLocalTime(&t);
@@ -642,33 +645,76 @@ extern "C" {
 extern unsigned RGPU_SLOT_DXGIFactory_CreateSwapChain,
     RGPU_SLOT_DXGIFactory2_CreateSwapChainForHwnd, RGPU_SLOT_DXGIFactory2_CreateSwapChainForComposition;
 }
-/* If TXR presents via D3D11On12, its rendering may be D3D11 immediate-context draws that
- * D3D11On12 translates to D3D12 internally (which is why no public D3D12 queue/list is
- * ever created). Probe the present D3D11 device's immediate context: hook Draw(13) /
- * DrawIndexed(12). If they fire, the game renders via D3D11 - and we capture it there. */
+/* If TXR presents via D3D11On12, testing only Draw/DrawIndexed is not decisive: modern
+ * engines can issue instanced/indirect draws, compute dispatches, or deferred command
+ * lists. Probe every work-submission method on the present device's immediate context.
+ * Slot indices come from the SDK's ID3D11DeviceContextVtbl in rgpu_d3d12_slots.cpp. */
+extern "C" {
+extern unsigned RGPU_SLOT_D11_DrawIndexed, RGPU_SLOT_D11_Draw,
+    RGPU_SLOT_D11_DrawIndexedInstanced, RGPU_SLOT_D11_DrawInstanced, RGPU_SLOT_D11_DrawAuto,
+    RGPU_SLOT_D11_DrawIndexedInstancedIndirect, RGPU_SLOT_D11_DrawInstancedIndirect,
+    RGPU_SLOT_D11_Dispatch, RGPU_SLOT_D11_DispatchIndirect, RGPU_SLOT_D11_ExecuteCommandList;
+}
 typedef void (STDMETHODCALLTYPE *fnD11Draw)(ID3D11DeviceContext *, UINT, UINT);
 typedef void (STDMETHODCALLTYPE *fnD11DrawIndexed)(ID3D11DeviceContext *, UINT, UINT, INT);
+typedef void (STDMETHODCALLTYPE *fnD11DrawIndexedInstanced)(ID3D11DeviceContext *, UINT, UINT, UINT, INT, UINT);
+typedef void (STDMETHODCALLTYPE *fnD11DrawInstanced)(ID3D11DeviceContext *, UINT, UINT, UINT, UINT);
+typedef void (STDMETHODCALLTYPE *fnD11DrawAuto)(ID3D11DeviceContext *);
+typedef void (STDMETHODCALLTYPE *fnD11Indirect)(ID3D11DeviceContext *, ID3D11Buffer *, UINT);
+typedef void (STDMETHODCALLTYPE *fnD11Dispatch)(ID3D11DeviceContext *, UINT, UINT, UINT);
+typedef void (STDMETHODCALLTYPE *fnD11ExecuteCommandList)(ID3D11DeviceContext *, ID3D11CommandList *, BOOL);
 static fnD11Draw o_D11Draw = nullptr; static fnD11DrawIndexed o_D11DrawIndexed = nullptr;
-static void STDMETHODCALLTYPE h_D11Draw(ID3D11DeviceContext *c, UINT vc, UINT sv) {
-    if (InterlockedIncrement(&g_draws) == 1) rgpu_log("D3D11 Draw fired -> TXR renders via D3D11On12; capturing at the D3D11 layer");
-    rgpu_args_draw a{vc, sv, 1, 0}; tee(RGPU_CMD_DRAW, oid(c), &a, sizeof(a));
-    o_D11Draw(c, vc, sv);
+static fnD11DrawIndexedInstanced o_D11DrawIndexedInstanced = nullptr;
+static fnD11DrawInstanced o_D11DrawInstanced = nullptr; static fnD11DrawAuto o_D11DrawAuto = nullptr;
+static fnD11Indirect o_D11DrawIndexedInstancedIndirect = nullptr, o_D11DrawInstancedIndirect = nullptr, o_D11DispatchIndirect = nullptr;
+static fnD11Dispatch o_D11Dispatch = nullptr; static fnD11ExecuteCommandList o_D11ExecuteCommandList = nullptr;
+static volatile LONG g_d11_work = 0, g_d11_draw = 0, g_d11_draw_indexed = 0,
+    g_d11_draw_indexed_instanced = 0, g_d11_draw_instanced = 0, g_d11_draw_auto = 0,
+    g_d11_draw_indexed_indirect = 0, g_d11_draw_indirect = 0, g_d11_dispatch_calls = 0,
+    g_d11_dispatch_indirect = 0, g_d11_execute_command_list = 0;
+static LONG d11_work(const char *name) {
+    LONG n = InterlockedIncrement(&g_d11_work);
+    if (n <= 64 || (n % 100) == 0)
+        rgpu_log("D3D11On12 work method fired: %s (total=%ld)", name, n);
+    return n;
 }
-static void STDMETHODCALLTYPE h_D11DrawIndexed(ID3D11DeviceContext *c, UINT ic, UINT si, INT bv) {
-    if (InterlockedIncrement(&g_draws) == 1) rgpu_log("D3D11 DrawIndexed fired -> TXR renders via D3D11On12; capturing at the D3D11 layer");
-    rgpu_args_draw_indexed a{ic, si, bv, 1, 0}; tee(RGPU_CMD_DRAW_INDEXED, oid(c), &a, sizeof(a));
-    o_D11DrawIndexed(c, ic, si, bv);
-}
-static volatile LONG g_d11_probed = 0;
+static void STDMETHODCALLTYPE h_D11Draw(ID3D11DeviceContext *c, UINT vc, UINT sv) { InterlockedIncrement(&g_d11_draw); d11_work("Draw"); rgpu_args_draw a{vc, sv, 1, 0}; tee(RGPU_CMD_DRAW, oid(c), &a, sizeof(a)); o_D11Draw(c, vc, sv); }
+static void STDMETHODCALLTYPE h_D11DrawIndexed(ID3D11DeviceContext *c, UINT ic, UINT si, INT bv) { InterlockedIncrement(&g_d11_draw_indexed); d11_work("DrawIndexed"); rgpu_args_draw_indexed a{ic, si, bv, 1, 0}; tee(RGPU_CMD_DRAW_INDEXED, oid(c), &a, sizeof(a)); o_D11DrawIndexed(c, ic, si, bv); }
+static void STDMETHODCALLTYPE h_D11DrawIndexedInstanced(ID3D11DeviceContext *c, UINT ic, UINT inst, UINT si, INT bv, UINT sinst) { InterlockedIncrement(&g_d11_draw_indexed_instanced); d11_work("DrawIndexedInstanced"); rgpu_args_draw_indexed a{ic, si, bv, inst, sinst}; tee(RGPU_CMD_DRAW_INDEXED, oid(c), &a, sizeof(a)); o_D11DrawIndexedInstanced(c, ic, inst, si, bv, sinst); }
+static void STDMETHODCALLTYPE h_D11DrawInstanced(ID3D11DeviceContext *c, UINT vc, UINT inst, UINT sv, UINT sinst) { InterlockedIncrement(&g_d11_draw_instanced); d11_work("DrawInstanced"); rgpu_args_draw a{vc, sv, inst, sinst}; tee(RGPU_CMD_DRAW, oid(c), &a, sizeof(a)); o_D11DrawInstanced(c, vc, inst, sv, sinst); }
+static void STDMETHODCALLTYPE h_D11DrawAuto(ID3D11DeviceContext *c) { InterlockedIncrement(&g_d11_draw_auto); d11_work("DrawAuto"); o_D11DrawAuto(c); }
+static void STDMETHODCALLTYPE h_D11DrawIndexedInstancedIndirect(ID3D11DeviceContext *c, ID3D11Buffer *b, UINT off) { InterlockedIncrement(&g_d11_draw_indexed_indirect); d11_work("DrawIndexedInstancedIndirect"); o_D11DrawIndexedInstancedIndirect(c, b, off); }
+static void STDMETHODCALLTYPE h_D11DrawInstancedIndirect(ID3D11DeviceContext *c, ID3D11Buffer *b, UINT off) { InterlockedIncrement(&g_d11_draw_indirect); d11_work("DrawInstancedIndirect"); o_D11DrawInstancedIndirect(c, b, off); }
+static void STDMETHODCALLTYPE h_D11Dispatch(ID3D11DeviceContext *c, UINT x, UINT y, UINT z) { InterlockedIncrement(&g_d11_dispatch_calls); LONG n=d11_work("Dispatch"); if(n<=64 || (n%100)==0) rgpu_log("D3D11On12 Dispatch dimensions #%ld = %ux%ux%u",n,x,y,z); rgpu_args_dispatch a{x,y,z}; tee(RGPU_CMD_DISPATCH, oid(c), &a, sizeof(a)); o_D11Dispatch(c, x, y, z); }
+static void STDMETHODCALLTYPE h_D11DispatchIndirect(ID3D11DeviceContext *c, ID3D11Buffer *b, UINT off) { InterlockedIncrement(&g_d11_dispatch_indirect); d11_work("DispatchIndirect"); o_D11DispatchIndirect(c, b, off); }
+static void STDMETHODCALLTYPE h_D11ExecuteCommandList(ID3D11DeviceContext *c, ID3D11CommandList *l, BOOL restore) { InterlockedIncrement(&g_d11_execute_command_list); d11_work("ExecuteCommandList(deferred)"); o_D11ExecuteCommandList(c, l, restore); }
+static void *g_d11_context_vtbl = nullptr;
 static void probe_d3d11_context(IUnknown *pDevice) {
-    if (!pDevice || InterlockedCompareExchange(&g_d11_probed, 1, 0) != 0) return;
+    if (!pDevice) return;
     ID3D11Device *d11 = nullptr;
-    if (FAILED(pDevice->QueryInterface(__uuidof(ID3D11Device), (void **)&d11)) || !d11) { g_d11_probed = 0; return; }
+    if (FAILED(pDevice->QueryInterface(__uuidof(ID3D11Device), (void **)&d11)) || !d11) return;
     ID3D11DeviceContext *ctx = nullptr; d11->GetImmediateContext(&ctx);
     if (ctx) {
-        bool a = patch_slot(ctx, 12, (void *)h_D11DrawIndexed, (void **)&o_D11DrawIndexed);
-        bool b = patch_slot(ctx, 13, (void *)h_D11Draw, (void **)&o_D11Draw);
-        rgpu_log("hooked D3D11On12 immediate-context %p Draw=%d DrawIndexed=%d (probe: does TXR render via D3D11?)", (void *)ctx, b, a);
+        void *vtbl = *(void **)ctx;
+        if (!g_d11_context_vtbl) {
+            bool ok[10] = {
+                patch_slot(ctx, RGPU_SLOT_D11_DrawIndexed, (void *)h_D11DrawIndexed, (void **)&o_D11DrawIndexed),
+                patch_slot(ctx, RGPU_SLOT_D11_Draw, (void *)h_D11Draw, (void **)&o_D11Draw),
+                patch_slot(ctx, RGPU_SLOT_D11_DrawIndexedInstanced, (void *)h_D11DrawIndexedInstanced, (void **)&o_D11DrawIndexedInstanced),
+                patch_slot(ctx, RGPU_SLOT_D11_DrawInstanced, (void *)h_D11DrawInstanced, (void **)&o_D11DrawInstanced),
+                patch_slot(ctx, RGPU_SLOT_D11_DrawAuto, (void *)h_D11DrawAuto, (void **)&o_D11DrawAuto),
+                patch_slot(ctx, RGPU_SLOT_D11_DrawIndexedInstancedIndirect, (void *)h_D11DrawIndexedInstancedIndirect, (void **)&o_D11DrawIndexedInstancedIndirect),
+                patch_slot(ctx, RGPU_SLOT_D11_DrawInstancedIndirect, (void *)h_D11DrawInstancedIndirect, (void **)&o_D11DrawInstancedIndirect),
+                patch_slot(ctx, RGPU_SLOT_D11_Dispatch, (void *)h_D11Dispatch, (void **)&o_D11Dispatch),
+                patch_slot(ctx, RGPU_SLOT_D11_DispatchIndirect, (void *)h_D11DispatchIndirect, (void **)&o_D11DispatchIndirect),
+                patch_slot(ctx, RGPU_SLOT_D11_ExecuteCommandList, (void *)h_D11ExecuteCommandList, (void **)&o_D11ExecuteCommandList)
+            };
+            g_d11_context_vtbl = vtbl;
+            int passed = 0; for (bool v : ok) if (v) passed++;
+            rgpu_log("hooked D3D11On12 context %p vtbl=%p work methods=%d/10 (direct/instanced/indirect/dispatch/deferred)", (void *)ctx, vtbl, passed);
+        } else if (g_d11_context_vtbl != vtbl) {
+            rgpu_log("additional D3D11 context vtbl=%p observed; primary probe vtbl=%p remains armed", vtbl, g_d11_context_vtbl);
+        }
         ctx->Release();
     }
     d11->Release();
@@ -785,16 +831,61 @@ static bool looks_like_com(void *obj) {   /* real COM object with a D3D12Core vt
 }
 static uint64_t *g_cet_table = nullptr; static int g_cet_count = 0; static void *g_cet_orig[32];
 static volatile LONG g_cet_q = 0, g_cet_l = 0, g_cet_d = 0;
-static void restore_core_export_table() {
+static volatile LONG g_cet_calls = 0, g_cet_restoring = 0;
+static volatile LONG g_cet_entry_calls[32] = {};
+static ULONGLONG g_cet_started_ms = 0, g_cet_probe_ms = 120000;
+static LONG g_cet_probe_calls = 2000000;
+
+static ULONGLONG rgpu_env_u64(const char *name, ULONGLONG fallback, ULONGLONG maxValue) {
+    char buf[64] = {};
+    DWORD n = GetEnvironmentVariableA(name, buf, (DWORD)sizeof(buf));
+    if (!n || n >= sizeof(buf)) return fallback;
+    char *end = nullptr;
+    unsigned long long value = std::strtoull(buf, &end, 10);
+    if (!end || end == buf || *end != '\0') return fallback;
+    return value > maxValue ? maxValue : value;
+}
+static void restore_core_export_table(const char *reason) {
     if (!g_cet_table || !g_cet_count) return;
+    if (InterlockedCompareExchange(&g_cet_restoring, 1, 0) != 0) return;
+    const int count = g_cet_count;
     DWORD oldp = 0;
-    if (VirtualProtect(g_cet_table, g_cet_count * sizeof(void *), PAGE_READWRITE, &oldp)) {
-        for (int i = 0; i < g_cet_count; i++) g_cet_table[i] = (uint64_t)(uintptr_t)g_cet_orig[i];
-        DWORD ign = 0; VirtualProtect(g_cet_table, g_cet_count * sizeof(void *), oldp, &ign);
-        FlushInstructionCache(GetCurrentProcess(), g_cet_table, g_cet_count * sizeof(void *));
+    if (!VirtualProtect(g_cet_table, count * sizeof(void *), PAGE_READWRITE, &oldp)) {
+        InterlockedExchange(&g_cet_restoring, 0);
+        return;
     }
+    for (int i = 0; i < count; i++) g_cet_table[i] = (uint64_t)(uintptr_t)g_cet_orig[i];
+    DWORD ign = 0; VirtualProtect(g_cet_table, count * sizeof(void *), oldp, &ign);
+    FlushInstructionCache(GetCurrentProcess(), g_cet_table, count * sizeof(void *));
     g_cet_count = 0;
-    rgpu_log("CORE_EXPORT_TABLE restored (queue+list captured; overhead removed)");
+
+    char entries[512] = {};
+    size_t used = 0;
+    for (int i = 0; i < count && used + 24 < sizeof(entries); i++) {
+        LONG calls = g_cet_entry_calls[i];
+        if (!calls) continue;
+        int n = std::snprintf(entries + used, sizeof(entries) - used, "%s%d:%ld", used ? "," : "", i, calls);
+        if (n <= 0) break;
+        used += (size_t)n;
+    }
+    rgpu_log("CORE_EXPORT_TABLE restored reason=%s calls=%ld devices=%ld queues=%ld lists=%ld entryCalls=[%s]",
+             reason ? reason : "unknown", g_cet_calls, g_cet_d, g_cet_q, g_cet_l, entries[0] ? entries : "none");
+    rgpu_log("D3D11On12 exact work summary total=%ld Draw=%ld DrawIndexed=%ld DrawIndexedInstanced=%ld DrawInstanced=%ld DrawAuto=%ld DrawIndexedIndirect=%ld DrawIndirect=%ld Dispatch=%ld DispatchIndirect=%ld ExecuteCommandList=%ld",
+             g_d11_work, g_d11_draw, g_d11_draw_indexed, g_d11_draw_indexed_instanced,
+             g_d11_draw_instanced, g_d11_draw_auto, g_d11_draw_indexed_indirect,
+             g_d11_draw_indirect, g_d11_dispatch_calls, g_d11_dispatch_indirect,
+             g_d11_execute_command_list);
+}
+static DWORD WINAPI rgpu_cet_timeout_thread(void *) {
+    ULONGLONG waitMs = g_cet_probe_ms;
+    while (waitMs > 0) {
+        DWORD slice = (DWORD)(waitMs > 1000 ? 1000 : waitMs);
+        Sleep(slice);
+        waitMs -= slice;
+        if (!g_cet_count || g_cet_q) return 0;
+    }
+    restore_core_export_table("timer probe expired");
+    return 0;
 }
 static void rgpu_cet_scan_out(int entry, void *created) {
     IUnknown *u = (IUnknown *)created;
@@ -809,10 +900,17 @@ static void rgpu_cet_scan_out(int entry, void *created) {
         if (InterlockedIncrement(&g_cet_d) == 1) rgpu_log("CORE_EXPORT_TABLE[%d] produced a DEVICE %p -> patching", entry, created);
         shadow_patch_device(created); d->Release();
     }
-    if (g_cet_d || (g_cet_q && g_cet_l)) restore_core_export_table();   /* device found via entry 0; queues aren't module exports */
+    /* Do not restore merely because CreateDevice returned a device. The previous code did
+     * exactly that, which removed every thunk after export entry 0 and made the later
+     * "no queue/list export exists" conclusion untestable. Queue discovery is the useful
+     * completion condition; submitted lists are then reachable through ExecuteCommandLists. */
 }
 typedef uint64_t (WINAPI *rgpu_cet_fn)(void *, void *, void *, void *, void *, void *, void *, void *);
 static uint64_t rgpu_cet_dispatch(int i, void *a0, void *a1, void *a2, void *a3, void *a4, void *a5, void *a6, void *a7) {
+    LONG callNo = InterlockedIncrement(&g_cet_calls);
+    LONG entryCall = InterlockedIncrement(&g_cet_entry_calls[i]);
+    if (entryCall == 1) rgpu_log("CORE_EXPORT_TABLE[%d] first call", i);
+
     void *args[8] = {a0, a1, a2, a3, a4, a5, a6, a7}; void *before[8];
     for (int k = 0; k < 8; k++) if (!safe_read_ptr(args[k], &before[k])) before[k] = (void *)~(uintptr_t)0;
     uint64_t r = ((rgpu_cet_fn)g_cet_orig[i])(a0, a1, a2, a3, a4, a5, a6, a7);
@@ -820,6 +918,15 @@ static uint64_t rgpu_cet_dispatch(int i, void *a0, void *a1, void *a2, void *a3,
         void *after;
         if (safe_read_ptr(args[k], &after) && after != before[k] && looks_like_com(after)) rgpu_cet_scan_out(i, after);
     }
+    /* Some private exports return an interface directly rather than through an out-param. */
+    void *returned = (void *)(uintptr_t)r;
+    if (looks_like_com(returned)) rgpu_cet_scan_out(i, returned);
+
+    ULONGLONG elapsed = GetTickCount64() - g_cet_started_ms;
+    if (g_cet_q) restore_core_export_table("queue captured");
+    else if ((g_cet_probe_calls > 0 && callNo >= g_cet_probe_calls) ||
+             (g_cet_probe_ms > 0 && elapsed >= g_cet_probe_ms))
+        restore_core_export_table("bounded probe expired");
     return r;
 }
 #define CET_THUNK(n) static uint64_t WINAPI rgpu_cet_thunk_##n(void *a0, void *a1, void *a2, void *a3, void *a4, void *a5, void *a6, void *a7) { return rgpu_cet_dispatch(n, a0, a1, a2, a3, a4, a5, a6, a7); }
@@ -837,6 +944,13 @@ static void *g_cet_thunks[24] = {
 static volatile LONG g_cet_hooked = 0;
 static void hook_core_export_table(void *table) {
     if (!table || InterlockedCompareExchange(&g_cet_hooked, 1, 0) != 0) return;
+    g_cet_probe_ms = rgpu_env_u64("RGPU_CET_PROBE_MS", 120000, 600000);
+    g_cet_probe_calls = (LONG)rgpu_env_u64("RGPU_CET_PROBE_CALLS", 2000000, 20000000);
+    g_cet_started_ms = GetTickCount64();
+    InterlockedExchange(&g_cet_calls, 0);
+    InterlockedExchange(&g_cet_restoring, 0);
+    for (int i = 0; i < 32; i++) InterlockedExchange(&g_cet_entry_calls[i], 0);
+
     uint64_t *q = (uint64_t *)table;
     int count = 0;
     for (int i = 0; i < 24; i++) { void *e; if (!safe_read_ptr(&q[i], &e) || !is_code_ptr(e)) break; count++; }
@@ -847,7 +961,12 @@ static void hook_core_export_table(void *table) {
         FlushInstructionCache(GetCurrentProcess(), q, count * sizeof(void *));
         g_cet_table = q; g_cet_count = count;
     }
-    rgpu_log("CORE_EXPORT_TABLE hooked %d entries (generic queue/list/device detection)", count);
+    if (g_cet_count && g_cet_probe_ms) {
+        HANDLE timer = CreateThread(nullptr, 0, rgpu_cet_timeout_thread, nullptr, 0, nullptr);
+        if (timer) CloseHandle(timer);
+    }
+    rgpu_log("CORE_EXPORT_TABLE hooked %d entries (probe=%llums/%ld calls; device return no longer ends probe)",
+             count, (unsigned long long)g_cet_probe_ms, g_cet_probe_calls);
 }
 typedef uintptr_t (STDMETHODCALLTYPE *fnCoreVersionedExports)(IUnknown *, void *);
 static fnCoreVersionedExports o_CoreVersioned11 = nullptr;
@@ -936,6 +1055,7 @@ static bool uname_is_d3d12core(const RGPU_UNICODE_STRING *u) {
     if (len > wl) { wchar_t p = tail[-1]; if (p != L'\\' && p != L'/') return false; }
     return true;
 }
+
 /* ntdll DLL-load notification: the documented, hook-free way to observe module loads.
  * The callback fires synchronously while the loader still holds control (before
  * LdrLoadDll returns to the Agility bootstrap), giving us the D3D12Core base address so
@@ -971,7 +1091,7 @@ static void install_ldrloaddll_hook() {
 }
 static DWORD WINAPI rgpu_core_watcher(LPVOID) {
     hook_d3d12core_now();              /* in case it was already mapped before we hooked */
-    for (int i = 0; i < 4000 && !o_CoreGetInterface; i++) Sleep(15);   /* keep alive as fallback */
+    for (int i = 0; i < 4000 && !o_CoreGetInterface; i++) Sleep(15);
     if (!o_CoreGetInterface) rgpu_log("core-watcher: D3D12Core!D3D12GetInterface never hooked within timeout");
     return 0;
 }

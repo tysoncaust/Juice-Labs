@@ -1,0 +1,37 @@
+Tokyo Xtreme Racer remote-stream end-to-end validation
+Date: 2026-07-22 (Australia/Brisbane)
+
+Host
+- Windows Sunshine 2026.516.143833, SunshineService automatic/running.
+- Host address used by paired MacBook: 192.168.0.204.
+- Moonlight app-list query succeeded and returned Desktop and Steam Big Picture.
+- Sunshine accepted the Desktop session and logged CLIENT CONNECTED.
+- Actual working encoder: Intel Quick Sync h264_qsv. The live config still requests NVENC first, but NVENC is unsupported on the active Intel display GPU and Sunshine falls back to Quick Sync.
+- Session capture: 1920x1080 at 60 fps, H.264, stereo Opus audio.
+
+Game
+- TXR launched without a diagnostic d3d12.dll present.
+- Process: TokyoXtremeRacer-Win64-Shipping.exe.
+- Validation window: 25 seconds while Moonlight stream was active.
+- Result: process remained alive.
+- Working set at validation: 6,045,470,720 bytes.
+- Host test result: TXR_STREAM_HOST_TEST=PASS.
+
+Moonlight client
+- Client: paired MacBook, Moonlight in /Applications/Moonlight.app.
+- Control, video, audio, and input streams all initialized.
+- First video packet arrived after 200 ms.
+- Hardware decode: Apple VideoToolbox/Metal on Apple M1.
+- Stream duration: 90 seconds (bounded test ended by harness timeout).
+- Incoming/decoded/rendered rate: 33.84 / 33.84 / 33.78 FPS average across the whole session. This average includes static desktop and startup periods; the requested stream mode remained 1920x1080x60.
+- Network frame loss: 0.00%.
+- Network jitter drops: 0.15%.
+- Average network latency: 3 ms (variance 1 ms).
+- Host processing latency min/max/average: 6.4 / 89.0 / 10.3 ms.
+- Average decode time: 4.22 ms.
+- Average render time: 1.58 ms.
+- Audio: first packet received; stereo CoreAudio output initialized.
+- Shutdown: bounded harness timeout generated a quit event, followed by orderly stream cleanup.
+
+Conclusion
+The Sunshine/Moonlight architecture is operational end-to-end for a playable TXR session. It runs the complete Windows game and graphics stack on the Windows host and streams video/audio/input to the paired MacBook. This is separate from the unfinished research goal of running the game process on a CPU-only client while virtualizing D3D12 execution onto Google Colab.

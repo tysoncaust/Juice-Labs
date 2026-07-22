@@ -20,6 +20,15 @@ if ($py -and $inc) {
 # WIDL_EXPLICIT_AGGREGATE_RETURNS: make aggregate-return vtable slots use the hidden
 # *__ret pointer form, matching the MSVC-built D3D12Core ABI exactly (see wrappers.h).
 $cflags = "-DWIDL_EXPLICIT_AGGREGATE_RETURNS"
+
+# The inline-hook relocation test is a required acceptance gate. It covers ordinary
+# prologues, survival after a later vtable re-patch, and short conditional branches
+# whose target lies inside the overwritten patch span (TXR CreateCommandList class).
+& $gxx -std=c++17 -O2 "$here\test\rgpu_inlinehook_test.cpp" -o "$here\test\rgpu_inlinehook_test.exe"
+Write-Host "built test\rgpu_inlinehook_test.exe; running..."
+& "$here\test\rgpu_inlinehook_test.exe"
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 # proxy DLL: main TU + the CINTERFACE slots TU (authoritative vtable indices)
 & $gxx -std=c++17 -O2 $cflags -shared -static-libgcc -static-libstdc++ "-Wl,--kill-at" `
     "$here\src\rgpu_d3d12_proxy.cpp" "$here\src\rgpu_d3d12_slots.cpp" `

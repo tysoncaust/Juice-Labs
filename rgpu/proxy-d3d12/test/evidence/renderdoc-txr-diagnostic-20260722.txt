@@ -1,0 +1,29 @@
+Tokyo Xtreme Racer / RenderDoc D3D12 boundary diagnostic
+Date: 2026-07-22 (Australia/Brisbane)
+RenderDoc: 1.44 signed upstream Windows release
+Executable: TokyoXtremeRacer-Win64-Shipping.exe
+
+Reliable facts retained from RenderDoc process logs:
+- RenderDoc registered its normal D3D12 hooks in TXR.
+- It observed a D3D12 device on NVIDIA GeForce RTX 3050 Laptop GPU, driver 32.0.16.1074.
+- It associated a D3D12 frame capturer with TXR's swap-chain window.
+- It logged Starting capture and Finished capture, Frame 2.
+- It reported that the capture used DXIL.
+- TXR queried an unknown/private ID3D12Device interface GUID {1f052807-0b46-4acc-8a89-364f793718a4}; this is a concrete wrapper-compatibility difference to investigate.
+
+Capture-artifact limitation:
+- No replayable .rdc is claimed.
+- The same RenderDoc process log recorded "Stream created with invalid file handle" before capture.
+- renderdoccmd thumb later reported that the generated container did not have a frame capture.
+- A later attempt generated a corrupted container with an unrecognised section type.
+- Invalid .rdc containers and bulky attempt directories were deliberately removed from source control.
+
+Engineering conclusion:
+A mature standard D3D12 wrapper can observe TXR's real D3D12 device and associate a frame capturer with the game's window. The earlier conclusion that proprietary D3D12Core constructor disassembly was the only route is not supported. The custom rgpu path is missing one or more interface, identity, child-object, swap-chain-association, or lifetime behaviours that RenderDoc handles.
+
+Related final custom-proxy evidence:
+- txr-rgpu-20260722-132010.log is isolated per process and not contaminated by the harness.
+- All four known D3D12 queue/list creation implementation bodies inline-hook successfully.
+- The corrected private export-table probe remains active to its timer and sees no queue/list.
+- The expanded D3D11On12 context hook records an exact startup burst of 82 work calls: Dispatch=58, DrawIndexed=9, DrawIndexedInstanced=14, DrawInstanced=1.
+- This disproves the earlier claim that D3D11On12 submits no work, but the startup-concentrated burst is not yet proof of sustained gameplay-frame rendering.

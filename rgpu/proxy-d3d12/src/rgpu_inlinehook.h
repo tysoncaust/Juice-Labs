@@ -1,8 +1,8 @@
 /* rgpu minimal x64 inline (trampoline) hook.
  *
- * Writes a 14-byte RIP-relative absolute JMP (FF 25 00000000 <abs64>) at a target
- * function's entry and relocates the overwritten prologue into an executable
- * trampoline, so calling the trampoline runs the original function. Unlike vtable
+ * Writes a 5-byte relative JMP at the target to a nearby relay, whose 14-byte
+ * absolute JMP reaches the detour. The overwritten prologue is relocated into an
+ * executable trampoline, so calling the trampoline runs the original function. Unlike vtable
  * patching, this hooks the function BODY — so a third-party overlay (e.g. UE4SS)
  * re-patching the same vtable slot afterwards cannot bypass us.
  *
@@ -20,13 +20,20 @@
 
 /* Decoded instruction: total length + where a field that needs relocation lives.
  * rip_disp_off > 0: byte offset of a RIP-relative disp32 within the instruction.
- * rel32_off   > 0: byte offset of a rel32 (E8 call / E9 jmp) within the instruction. */
-struct rgpu_insn { int len; int rip_disp_off; int rel32_off; };
+ * rel32_off   > 0: byte offset of a rel32 (E8 call / E9 jmp) within the instruction.
+ * rel8_off    > 0: byte offset of a short conditional-branch displacement. */
+struct rgpu_insn {
+    int len;
+    int rip_disp_off;
+    int rel32_off;
+    int rel8_off;
+    int rel8_cond;
+};
 
 /* Decode one x64 instruction from the small whitelist we relocate. len==0 => not
  * safely relocatable (abort the hook). */
 static inline rgpu_insn rgpu_x64_decode(const uint8_t *p) {
-    rgpu_insn r{0, 0, 0};
+    rgpu_insn r{0, 0, 0, 0, 0};
     int i = 0;
     for (;;) {   /* legacy + REX prefixes */
         uint8_t b = p[i];
@@ -43,6 +50,13 @@ static inline rgpu_insn rgpu_x64_decode(const uint8_t *p) {
         else if (mod == 0 && rm == 5) { r.rip_disp_off = i; i += 4; return; }  /* RIP-rel disp32 */
         if (mod == 1) i += 1; else if (mod == 2) i += 4;
     };
+    if (op >= 0x70 && op <= 0x7F) {                 /* short Jcc rel8 */
+        r.rel8_off = i;
+        r.rel8_cond = op & 0x0F;
+        i += 1;
+        r.len = i;
+        return r;
+    }
     switch (op) {
         case 0x50: case 0x51: case 0x52: case 0x53:
         case 0x54: case 0x55: case 0x56: case 0x57:    /* push r64 */
@@ -106,43 +120,137 @@ static inline void *rgpu_alloc_near(void *target, size_t size) {
  * position-dependent prologues (e.g. `mov rbx,[rip+x]`) work too. */
 static inline bool rgpu_inline_hook(void *target, void *detour, void **tramp_out) {
     uint8_t *t = (uint8_t *)target;
-    struct { int off, len, ripoff, reloff; } ins[12];
-    int nins = 0, copied = 0;
-    while (copied < 14) {
+    struct HookInsn {
+        int src_off, src_len, out_off, out_len;
+        int ripoff, rel32off, rel8off, rel8cond;
+    } ins[12];
+    int nins = 0, copied = 0, tramp_bytes = 0;
+
+    /* Patch the target with a 5-byte relative jump to a nearby relay. The relay then
+     * performs the unrestricted 14-byte absolute jump to the detour. This minimizes
+     * the overwritten prologue and avoids corrupting common loop/branch targets that
+     * land between bytes 5 and 13 of a function entry. */
+    while (copied < 5) {
         if (nins >= 12) return false;
         rgpu_insn d = rgpu_x64_decode(t + copied);
-        if (d.len <= 0) return false;                  /* abort: not relocatable */
-        ins[nins] = {copied, d.len, d.rip_disp_off, d.rel32_off};
-        nins++; copied += d.len;
+        if (d.len <= 0) return false;
+        int out_len = d.rel8_off ? 6 : d.len;
+        ins[nins] = {copied, d.len, tramp_bytes, out_len,
+                     d.rip_disp_off, d.rel32_off, d.rel8_off, d.rel8_cond};
+        nins++;
+        copied += d.len;
+        tramp_bytes += out_len;
     }
-    uint8_t *tramp = (uint8_t *)rgpu_alloc_near(target, (size_t)copied + 14);
+
+    const size_t jump_size = 14;
+    const size_t allocation_size = (size_t)tramp_bytes + jump_size + jump_size;
+    uint8_t *tramp = (uint8_t *)rgpu_alloc_near(target, allocation_size);
     if (!tramp) return false;
-    std::memcpy(tramp, t, copied);
-    for (int j = 0; j < nins; j++) {                   /* fix up relative fields for the new location */
-        int o = ins[j].off, len = ins[j].len;
-        if (ins[j].ripoff) {
-            int32_t disp; std::memcpy(&disp, t + o + ins[j].ripoff, 4);
-            int64_t abs = (int64_t)(uintptr_t)(t + o + len) + disp;
-            int64_t nd = abs - (int64_t)(uintptr_t)(tramp + o + len);
-            if (nd < INT32_MIN || nd > INT32_MAX) { VirtualFree(tramp, 0, MEM_RELEASE); return false; }
-            int32_t nd32 = (int32_t)nd; std::memcpy(tramp + o + ins[j].ripoff, &nd32, 4);
+    uint8_t *relay = tramp + tramp_bytes + jump_size;
+
+    auto translate_branch_target = [&](uintptr_t absolute, uintptr_t *translated) -> bool {
+        uintptr_t begin = (uintptr_t)t, finish = begin + (uintptr_t)copied;
+        if (absolute < begin || absolute >= finish) {
+            *translated = absolute;
+            return true;
         }
-        if (ins[j].reloff) {
-            int32_t rel; std::memcpy(&rel, t + o + ins[j].reloff, 4);
-            int64_t abs = (int64_t)(uintptr_t)(t + o + len) + rel;
-            int64_t nr = abs - (int64_t)(uintptr_t)(tramp + o + len);
-            if (nr < INT32_MIN || nr > INT32_MAX) { VirtualFree(tramp, 0, MEM_RELEASE); return false; }
-            int32_t nr32 = (int32_t)nr; std::memcpy(tramp + o + ins[j].reloff, &nr32, 4);
+        int source_offset = (int)(absolute - begin);
+        for (int k = 0; k < nins; k++) {
+            if (ins[k].src_off == source_offset) {
+                *translated = (uintptr_t)(tramp + ins[k].out_off);
+                return true;
+            }
+        }
+        return false;
+    };
+
+    for (int j = 0; j < nins; j++) {
+        HookInsn &h = ins[j];
+        uint8_t *src = t + h.src_off;
+        uint8_t *dst = tramp + h.out_off;
+
+        if (h.rel8off) {
+            int8_t rel = 0;
+            std::memcpy(&rel, src + h.rel8off, 1);
+            uintptr_t absolute = (uintptr_t)(src + h.src_len) + (intptr_t)rel;
+            uintptr_t translated = 0;
+            if (!translate_branch_target(absolute, &translated)) {
+                VirtualFree(tramp, 0, MEM_RELEASE);
+                return false;
+            }
+            dst[0] = 0x0F;
+            dst[1] = (uint8_t)(0x80 | h.rel8cond);
+            int64_t nr = (int64_t)translated - (int64_t)(uintptr_t)(dst + 6);
+            if (nr < INT32_MIN || nr > INT32_MAX) {
+                VirtualFree(tramp, 0, MEM_RELEASE);
+                return false;
+            }
+            int32_t nr32 = (int32_t)nr;
+            std::memcpy(dst + 2, &nr32, 4);
+            continue;
+        }
+
+        std::memcpy(dst, src, (size_t)h.src_len);
+        if (h.ripoff) {
+            int32_t disp;
+            std::memcpy(&disp, src + h.ripoff, 4);
+            int64_t absolute = (int64_t)(uintptr_t)(src + h.src_len) + disp;
+            int64_t nd = absolute - (int64_t)(uintptr_t)(dst + h.src_len);
+            if (nd < INT32_MIN || nd > INT32_MAX) {
+                VirtualFree(tramp, 0, MEM_RELEASE);
+                return false;
+            }
+            int32_t nd32 = (int32_t)nd;
+            std::memcpy(dst + h.ripoff, &nd32, 4);
+        }
+        if (h.rel32off) {
+            int32_t rel;
+            std::memcpy(&rel, src + h.rel32off, 4);
+            uintptr_t absolute = (uintptr_t)(src + h.src_len) + (intptr_t)rel;
+            uintptr_t translated = 0;
+            if (!translate_branch_target(absolute, &translated)) {
+                VirtualFree(tramp, 0, MEM_RELEASE);
+                return false;
+            }
+            int64_t nr = (int64_t)translated - (int64_t)(uintptr_t)(dst + h.src_len);
+            if (nr < INT32_MIN || nr > INT32_MAX) {
+                VirtualFree(tramp, 0, MEM_RELEASE);
+                return false;
+            }
+            int32_t nr32 = (int32_t)nr;
+            std::memcpy(dst + h.rel32off, &nr32, 4);
         }
     }
-    tramp[copied] = 0xFF; tramp[copied + 1] = 0x25;    /* jmp qword ptr [rip+0] -> original + copied */
-    *(uint32_t *)(tramp + copied + 2) = 0;
-    *(uint64_t *)(tramp + copied + 6) = (uint64_t)(t + copied);
+
+    /* Trampoline tail -> first untouched original instruction. */
+    tramp[tramp_bytes] = 0xFF;
+    tramp[tramp_bytes + 1] = 0x25;
+    *(uint32_t *)(tramp + tramp_bytes + 2) = 0;
+    *(uint64_t *)(tramp + tramp_bytes + 6) = (uint64_t)(t + copied);
+
+    /* Nearby relay -> arbitrary detour address. */
+    relay[0] = 0xFF;
+    relay[1] = 0x25;
+    *(uint32_t *)(relay + 2) = 0;
+    *(uint64_t *)(relay + 6) = (uint64_t)detour;
+
+    int64_t relay_rel = (int64_t)(uintptr_t)relay - (int64_t)(uintptr_t)(t + 5);
+    if (relay_rel < INT32_MIN || relay_rel > INT32_MAX) {
+        VirtualFree(tramp, 0, MEM_RELEASE);
+        return false;
+    }
+
     DWORD old;
-    if (!VirtualProtect(t, 14, PAGE_EXECUTE_READWRITE, &old)) { VirtualFree(tramp, 0, MEM_RELEASE); return false; }
-    t[0] = 0xFF; t[1] = 0x25; *(uint32_t *)(t + 2) = 0; *(uint64_t *)(t + 6) = (uint64_t)detour;  /* abs jmp -> detour */
-    VirtualProtect(t, 14, old, &old);
-    FlushInstructionCache(GetCurrentProcess(), t, 14);
+    if (!VirtualProtect(t, (SIZE_T)copied, PAGE_EXECUTE_READWRITE, &old)) {
+        VirtualFree(tramp, 0, MEM_RELEASE);
+        return false;
+    }
+    t[0] = 0xE9;
+    int32_t relay_rel32 = (int32_t)relay_rel;
+    std::memcpy(t + 1, &relay_rel32, 4);
+    for (int i = 5; i < copied; i++) t[i] = 0x90;
+    VirtualProtect(t, (SIZE_T)copied, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), t, (SIZE_T)copied);
     *tramp_out = tramp;
     return true;
 }

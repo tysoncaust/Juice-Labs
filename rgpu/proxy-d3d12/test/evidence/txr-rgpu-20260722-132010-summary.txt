@@ -1,0 +1,131 @@
+﻿TXR rgpu corrected export-table probe
+Timestamp: 20260722-132010
+DurationSeconds: 30
+EvidenceLog: C:\Users\email\Desktop\Juice-Labs\rgpu\proxy-d3d12\test\evidence\txr-rgpu-20260722-132010.log
+InterestingLines: 125
+
+[13:20:11.727] ATTACH host="C:\Program Files\Tokyo Xtreme Racer\TokyoXtremeRacer\Binaries\Win64\TokyoXtremeRacer-Win64-Shipping.exe" (rgpu d3d12 proxy + command-stream tee)
+[13:20:11.728] inline-hooked d3d11!D3D11On12CreateDevice @ 00007ffcd0bbfc50
+[13:20:11.729] D3D11On12CreateDevice hook installed @ 00007ffcd0bbfc50
+[13:20:13.324] DXGI pDevice=0000020dd72f2030 vtbl=00007ffcd0ced550[d3d11.dll] caller=00007ffbcca6a4d6[d3d12.dll] QI(Queue)=0x80004002 isID3D11Device=1 - NOT a D3D12 queue
+[13:20:13.324] hooked D3D11On12 context 0000020dcf596218 vtbl=0000020dcf596220 work methods=10/10 (direct/instanced/indirect/dispatch/deferred)
+[13:20:13.883] CORE_EXPORT_TABLE hooked 18 entries (probe=20000ms/5000000 calls; device return no longer ends probe)
+[13:20:13.883] CORE_EXPORT_TABLE[7] first call
+[13:20:13.884] CORE_EXPORT_TABLE[0] first call
+[13:20:13.886] CORE_EXPORT_TABLE[14] first call
+[13:20:13.898] CORE_EXPORT_TABLE[9] first call
+[13:20:13.898] CORE_EXPORT_TABLE[10] first call
+[13:20:13.898] CORE_EXPORT_TABLE[10] produced a DEVICE 0000020deec79380 -> patching
+[13:20:14.231] CORE_EXPORT_TABLE[13] first call
+[13:20:17.215] D3D11On12 work method fired: Dispatch (total=1)
+[13:20:17.216] D3D11On12 Dispatch dimensions #1 = 1x1x1
+[13:20:17.217] D3D11On12 work method fired: Dispatch (total=2)
+[13:20:17.217] D3D11On12 Dispatch dimensions #2 = 1x1x1
+[13:20:17.218] D3D11On12 work method fired: Dispatch (total=3)
+[13:20:17.218] D3D11On12 Dispatch dimensions #3 = 1x1x1
+[13:20:17.218] D3D11On12 work method fired: Dispatch (total=4)
+[13:20:17.219] D3D11On12 Dispatch dimensions #4 = 1x1x1
+[13:20:17.220] D3D11On12 work method fired: Dispatch (total=5)
+[13:20:17.220] D3D11On12 Dispatch dimensions #5 = 1x1x1
+[13:20:17.220] D3D11On12 work method fired: Dispatch (total=6)
+[13:20:17.220] D3D11On12 Dispatch dimensions #6 = 40960x1x1
+[13:20:17.220] D3D11On12 work method fired: Dispatch (total=7)
+[13:20:17.222] D3D11On12 Dispatch dimensions #7 = 2x1x1
+[13:20:17.222] D3D11On12 work method fired: Dispatch (total=8)
+[13:20:17.222] D3D11On12 Dispatch dimensions #8 = 2x1x1
+[13:20:17.222] D3D11On12 work method fired: Dispatch (total=9)
+[13:20:17.223] D3D11On12 Dispatch dimensions #9 = 2x1x1
+[13:20:17.224] D3D11On12 work method fired: Dispatch (total=10)
+[13:20:17.224] D3D11On12 Dispatch dimensions #10 = 1x1x1
+[13:20:17.225] D3D11On12 work method fired: Dispatch (total=11)
+[13:20:17.225] D3D11On12 Dispatch dimensions #11 = 1x1x1
+[13:20:17.226] D3D11On12 work method fired: Dispatch (total=12)
+[13:20:17.226] D3D11On12 Dispatch dimensions #12 = 1x1x1
+[13:20:17.226] D3D11On12 work method fired: Dispatch (total=13)
+[13:20:17.226] D3D11On12 Dispatch dimensions #13 = 1x1x1
+[13:20:17.226] D3D11On12 work method fired: Dispatch (total=14)
+[13:20:17.227] D3D11On12 Dispatch dimensions #14 = 1x1x1
+[13:20:17.248] D3D11On12 work method fired: Dispatch (total=15)
+[13:20:17.248] D3D11On12 Dispatch dimensions #15 = 1x1x1
+[13:20:17.250] D3D11On12 work method fired: Dispatch (total=16)
+[13:20:17.250] D3D11On12 Dispatch dimensions #16 = 1x1x1
+[13:20:17.250] D3D11On12 work method fired: Dispatch (total=17)
+[13:20:17.251] D3D11On12 Dispatch dimensions #17 = 1x1x1
+[13:20:17.251] D3D11On12 work method fired: Dispatch (total=18)
+[13:20:17.251] D3D11On12 Dispatch dimensions #18 = 1x1x1
+[13:20:17.252] D3D11On12 work method fired: Dispatch (total=19)
+[13:20:17.253] D3D11On12 Dispatch dimensions #19 = 1x1x1
+[13:20:17.253] D3D11On12 work method fired: Dispatch (total=20)
+[13:20:17.253] D3D11On12 Dispatch dimensions #20 = 40960x1x1
+[13:20:17.253] D3D11On12 work method fired: Dispatch (total=21)
+[13:20:17.254] D3D11On12 Dispatch dimensions #21 = 2x1x1
+[13:20:17.255] D3D11On12 work method fired: Dispatch (total=22)
+[13:20:17.255] D3D11On12 Dispatch dimensions #22 = 2x1x1
+[13:20:17.255] D3D11On12 work method fired: Dispatch (total=23)
+[13:20:17.256] D3D11On12 Dispatch dimensions #23 = 2x1x1
+[13:20:17.256] D3D11On12 work method fired: Dispatch (total=24)
+[13:20:17.256] D3D11On12 Dispatch dimensions #24 = 1x1x1
+[13:20:17.257] D3D11On12 work method fired: Dispatch (total=25)
+[13:20:17.257] D3D11On12 Dispatch dimensions #25 = 1x1x1
+[13:20:17.258] D3D11On12 work method fired: Dispatch (total=26)
+[13:20:17.258] D3D11On12 Dispatch dimensions #26 = 1x1x1
+[13:20:17.258] D3D11On12 work method fired: Dispatch (total=27)
+[13:20:17.259] D3D11On12 Dispatch dimensions #27 = 1x1x1
+[13:20:17.259] D3D11On12 work method fired: Dispatch (total=28)
+[13:20:17.259] D3D11On12 Dispatch dimensions #28 = 1x1x1
+[13:20:17.263] D3D11On12 work method fired: Dispatch (total=29)
+[13:20:17.263] D3D11On12 Dispatch dimensions #29 = 1x1x1
+[13:20:17.265] D3D11On12 work method fired: Dispatch (total=30)
+[13:20:17.265] D3D11On12 Dispatch dimensions #30 = 4x1x1
+[13:20:17.266] D3D11On12 work method fired: Dispatch (total=31)
+[13:20:17.266] D3D11On12 Dispatch dimensions #31 = 1x1x1
+[13:20:17.333] D3D11On12 work method fired: Dispatch (total=32)
+[13:20:17.333] D3D11On12 Dispatch dimensions #32 = 8x8x2
+[13:20:17.334] D3D11On12 work method fired: Dispatch (total=33)
+[13:20:17.334] D3D11On12 Dispatch dimensions #33 = 128x128x1
+[13:20:17.334] D3D11On12 work method fired: Dispatch (total=34)
+[13:20:17.334] D3D11On12 Dispatch dimensions #34 = 8x8x1
+[13:20:17.335] D3D11On12 work method fired: Dispatch (total=35)
+[13:20:17.335] D3D11On12 Dispatch dimensions #35 = 1x1x1
+[13:20:17.336] D3D11On12 work method fired: Dispatch (total=36)
+[13:20:17.337] D3D11On12 Dispatch dimensions #36 = 8x5x8
+[13:20:17.337] D3D11On12 work method fired: DrawIndexed (total=37)
+[13:20:17.338] D3D11On12 work method fired: DrawIndexed (total=38)
+[13:20:17.339] D3D11On12 work method fired: Dispatch (total=39)
+[13:20:17.339] D3D11On12 Dispatch dimensions #39 = 1x1x1
+[13:20:17.339] D3D11On12 work method fired: Dispatch (total=40)
+[13:20:17.340] D3D11On12 Dispatch dimensions #40 = 240x135x1
+[13:20:17.628] D3D11On12 work method fired: Dispatch (total=41)
+[13:20:17.628] D3D11On12 Dispatch dimensions #41 = 1x1x1
+[13:20:17.628] D3D11On12 work method fired: Dispatch (total=42)
+[13:20:17.629] D3D11On12 Dispatch dimensions #42 = 1x1x1
+[13:20:17.629] D3D11On12 work method fired: DrawInstanced (total=43)
+[13:20:17.630] D3D11On12 work method fired: DrawIndexed (total=44)
+[13:20:17.631] D3D11On12 work method fired: DrawIndexedInstanced (total=45)
+[13:20:17.631] D3D11On12 work method fired: DrawIndexedInstanced (total=46)
+[13:20:17.633] D3D11On12 work method fired: DrawIndexedInstanced (total=47)
+[13:20:17.633] D3D11On12 work method fired: DrawIndexedInstanced (total=48)
+[13:20:17.633] D3D11On12 work method fired: DrawIndexedInstanced (total=49)
+[13:20:17.634] D3D11On12 work method fired: DrawIndexedInstanced (total=50)
+[13:20:17.634] D3D11On12 work method fired: DrawIndexedInstanced (total=51)
+[13:20:17.634] D3D11On12 work method fired: DrawIndexedInstanced (total=52)
+[13:20:17.634] D3D11On12 work method fired: DrawIndexedInstanced (total=53)
+[13:20:17.634] D3D11On12 work method fired: DrawIndexedInstanced (total=54)
+[13:20:17.635] D3D11On12 work method fired: DrawIndexedInstanced (total=55)
+[13:20:17.636] D3D11On12 work method fired: DrawIndexedInstanced (total=56)
+[13:20:17.636] D3D11On12 work method fired: DrawIndexedInstanced (total=57)
+[13:20:17.637] D3D11On12 work method fired: DrawIndexedInstanced (total=58)
+[13:20:17.638] D3D11On12 work method fired: Dispatch (total=59)
+[13:20:17.639] D3D11On12 Dispatch dimensions #59 = 4x1x1
+[13:20:17.639] D3D11On12 work method fired: Dispatch (total=60)
+[13:20:17.639] D3D11On12 Dispatch dimensions #60 = 1x1x1
+[13:20:17.640] D3D11On12 work method fired: Dispatch (total=61)
+[13:20:17.640] D3D11On12 Dispatch dimensions #61 = 128x128x1
+[13:20:17.640] D3D11On12 work method fired: Dispatch (total=62)
+[13:20:17.641] D3D11On12 Dispatch dimensions #62 = 8x8x1
+[13:20:17.641] D3D11On12 work method fired: Dispatch (total=63)
+[13:20:17.641] D3D11On12 Dispatch dimensions #63 = 1x1x1
+[13:20:17.642] D3D11On12 work method fired: Dispatch (total=64)
+[13:20:17.642] D3D11On12 Dispatch dimensions #64 = 8x5x8
+[13:20:33.898] CORE_EXPORT_TABLE restored reason=timer probe expired calls=21 devices=8 queues=0 lists=0 entryCalls=[0:4,7:1,9:4,10:4,13:4,14:4]
+[13:20:33.898] D3D11On12 exact work summary total=82 Draw=0 DrawIndexed=9 DrawIndexedInstanced=14 DrawInstanced=1 DrawAuto=0 DrawIndexedIndirect=0 DrawIndirect=0 Dispatch=58 DispatchIndirect=0 ExecuteCommandList=0

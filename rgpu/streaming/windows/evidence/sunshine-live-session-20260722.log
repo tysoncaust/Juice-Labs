@@ -1,0 +1,373 @@
+[2026-07-22 12:42:56.501]: Info: Sunshine version: 2026.516.143833 commit: 14ffa6fdaa53f7b51512be2b3d24f3939695403c
+[2026-07-22 12:42:56.501]: Info: Package Publisher: LizardByte
+[2026-07-22 12:42:56.501]: Info: Publisher Website: https://app.lizardbyte.dev
+[2026-07-22 12:42:56.501]: Info: Get support: https://app.lizardbyte.dev/support
+[2026-07-22 12:42:56.501]: Info: config: 'encoder' = nvenc
+[2026-07-22 12:42:56.501]: Info: config: 'nvenc_preset' = 1
+[2026-07-22 12:42:56.501]: Info: config: 'channels' = 2
+[2026-07-22 12:42:56.502]: Info: Provided workaround settings for SettingsManager:
+{
+  "hdr_blank_delay": null
+}
+[2026-07-22 12:42:56.510]: Info: Currently available display devices:
+[
+  {
+    "device_id": "{29dabbd8-6d2c-52d3-a794-4713d6d94917}",
+    "display_name": "\\\\.\\DISPLAY1",
+    "edid": {
+      "manufacturer_id": "BOE",
+      "product_code": "0804",
+      "serial_number": 0
+    },
+    "friendly_name": "",
+    "info": {
+      "hdr_state": null,
+      "origin_point": {
+        "x": 0,
+        "y": 0
+      },
+      "primary": true,
+      "refresh_rate": {
+        "type": "rational",
+        "value": {
+          "denominator": 2375360,
+          "numerator": 342050000
+        }
+      },
+      "resolution": {
+        "height": 1080,
+        "width": 1920
+      },
+      "resolution_scale": {
+        "type": "rational",
+        "value": {
+          "denominator": 100,
+          "numerator": 100
+        }
+      }
+    }
+  },
+  {
+    "device_id": "{5eb52002-659f-5729-bdd8-9cdc4efd1bf5}",
+    "display_name": "\\\\.\\DISPLAY25",
+    "edid": {
+      "manufacturer_id": "MTT",
+      "product_code": "1337",
+      "serial_number": 518463207
+    },
+    "friendly_name": "VDD by MTT",
+    "info": {
+      "hdr_state": null,
+      "origin_point": {
+        "x": 0,
+        "y": 0
+      },
+      "primary": true,
+      "refresh_rate": {
+        "type": "rational",
+        "value": {
+          "denominator": 1,
+          "numerator": 60
+        }
+      },
+      "resolution": {
+        "height": 1080,
+        "width": 1920
+      },
+      "resolution_scale": {
+        "type": "rational",
+        "value": {
+          "denominator": 1,
+          "numerator": 0
+        }
+      }
+    }
+  }
+]
+[2026-07-22 12:42:56.801]: Info: nvprefs: Opened undo file from previous improper termination
+[2026-07-22 12:42:56.802]: Info: nvprefs: Restored OGL_CPL_PREFER_DXPRESENT for base profile
+[2026-07-22 12:42:56.837]: Info: nvprefs: Restored global profile settings from undo file - deleting the file
+[2026-07-22 12:42:56.846]: Info: nvprefs: No need to modify application profile settings
+[2026-07-22 12:42:56.846]: Info: nvprefs: Changed OGL_CPL_PREFER_DXPRESENT to OGL_CPL_PREFER_DXPRESENT_PREFER_ENABLED for base profile
+[2026-07-22 12:42:56.906]: Info: Compiling shaders...
+[2026-07-22 12:42:57.294]: Info: Compiled shaders
+[2026-07-22 12:42:57.305]: Info: Trying encoder [nvenc]
+[2026-07-22 12:42:57.428]: Info: 
+Device Description : Intel(R) UHD Graphics
+Device Vendor ID   : 0x00008086
+Device Device ID   : 0x00009A68
+Device Video Mem   : 128 MiB
+Device Sys Mem     : 0 MiB
+Share Sys Mem      : 8081 MiB
+Feature Level      : 0x0000B100
+Capture size       : 1920x1080
+Offset             : 0x0
+Virtual Desktop    : 1920x1080
+[2026-07-22 12:42:57.428]: Info: Active GPU has HAGS disabled
+[2026-07-22 12:42:57.428]: Info: Using realtime GPU priority
+[2026-07-22 12:42:57.429]: Info: 
+Colorspace         : DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709
+Bits Per Color     : 8
+Red Primary        : [0.639648,0.330078]
+Green Primary      : [0.299805,0.599609]
+Blue Primary       : [0.150391,0.0595703]
+White Point        : [0.3125,0.329102]
+Min Luminance      : 0.5 nits
+Max Luminance      : 270 nits
+Max Full Luminance : 270 nits
+[2026-07-22 12:42:57.429]: Info: Desktop resolution [1920x1080]
+[2026-07-22 12:42:57.429]: Info: Desktop format [DXGI_FORMAT_B8G8R8A8_UNORM]
+[2026-07-22 12:42:57.429]: Info: Display refresh rate [143.999Hz]
+[2026-07-22 12:42:57.429]: Info: Requested frame rate [60/1 exactly 60 fps]
+[2026-07-22 12:42:57.436]: Info: Encoder [nvenc] is not supported on this GPU
+[2026-07-22 12:42:57.445]: Error: Couldn't find any working encoder matching [nvenc]
+[2026-07-22 12:42:57.445]: Info: // Testing for available encoders, this may generate errors. You can safely ignore those errors. //
+[2026-07-22 12:42:57.445]: Info: Trying encoder [quicksync]
+[2026-07-22 12:42:57.490]: Info: 
+Device Description : Intel(R) UHD Graphics
+Device Vendor ID   : 0x00008086
+Device Device ID   : 0x00009A68
+Device Video Mem   : 128 MiB
+Device Sys Mem     : 0 MiB
+Share Sys Mem      : 8081 MiB
+Feature Level      : 0x0000B100
+Capture size       : 1920x1080
+Offset             : 0x0
+Virtual Desktop    : 1920x1080
+[2026-07-22 12:42:57.490]: Info: Active GPU has HAGS disabled
+[2026-07-22 12:42:57.490]: Info: Using realtime GPU priority
+[2026-07-22 12:42:57.490]: Info: 
+Colorspace         : DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709
+Bits Per Color     : 8
+Red Primary        : [0.639648,0.330078]
+Green Primary      : [0.299805,0.599609]
+Blue Primary       : [0.150391,0.0595703]
+White Point        : [0.3125,0.329102]
+Min Luminance      : 0.5 nits
+Max Luminance      : 270 nits
+Max Full Luminance : 270 nits
+[2026-07-22 12:42:57.491]: Info: Desktop resolution [1920x1080]
+[2026-07-22 12:42:57.491]: Info: Desktop format [DXGI_FORMAT_B8G8R8A8_UNORM]
+[2026-07-22 12:42:57.491]: Info: Display refresh rate [143.999Hz]
+[2026-07-22 12:42:57.491]: Info: Requested frame rate [60/1 exactly 60 fps]
+[2026-07-22 12:42:57.498]: Info: Creating encoder [h264_qsv]
+[2026-07-22 12:42:57.498]: Info: Color coding: SDR (Rec. 601)
+[2026-07-22 12:42:57.498]: Info: Color depth: 8-bit
+[2026-07-22 12:42:57.498]: Info: Color range: JPEG
+[2026-07-22 12:42:57.779]: Info: Streaming bitrate is 1000000
+[2026-07-22 12:42:57.827]: Info: Creating encoder [hevc_qsv]
+[2026-07-22 12:42:57.827]: Info: Color coding: SDR (Rec. 601)
+[2026-07-22 12:42:57.827]: Info: Color depth: 8-bit
+[2026-07-22 12:42:57.827]: Info: Color range: JPEG
+[2026-07-22 12:42:57.949]: Info: Streaming bitrate is 1000000
+[2026-07-22 12:42:58.052]: Info: Creating encoder [av1_qsv]
+[2026-07-22 12:42:58.052]: Info: Color coding: SDR (Rec. 601)
+[2026-07-22 12:42:58.052]: Info: Color depth: 8-bit
+[2026-07-22 12:42:58.052]: Info: Color range: JPEG
+[2026-07-22 12:42:58.192]: Info: Streaming bitrate is 1000000
+[2026-07-22 12:42:58.195]: Error: [av1_qsv @ 000002ccaafb3c80] Error querying encoder params: unsupported (-3)
+[2026-07-22 12:42:58.197]: Error: Could not open codec [av1_qsv]: Function not implemented
+[2026-07-22 12:42:58.260]: Info: 
+Device Description : Intel(R) UHD Graphics
+Device Vendor ID   : 0x00008086
+Device Device ID   : 0x00009A68
+Device Video Mem   : 128 MiB
+Device Sys Mem     : 0 MiB
+Share Sys Mem      : 8081 MiB
+Feature Level      : 0x0000B100
+Capture size       : 1920x1080
+Offset             : 0x0
+Virtual Desktop    : 1920x1080
+[2026-07-22 12:42:58.260]: Info: Active GPU has HAGS disabled
+[2026-07-22 12:42:58.260]: Info: Using realtime GPU priority
+[2026-07-22 12:42:58.260]: Info: 
+Colorspace         : DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709
+Bits Per Color     : 8
+Red Primary        : [0.639648,0.330078]
+Green Primary      : [0.299805,0.599609]
+Blue Primary       : [0.150391,0.0595703]
+White Point        : [0.3125,0.329102]
+Min Luminance      : 0.5 nits
+Max Luminance      : 270 nits
+Max Full Luminance : 270 nits
+[2026-07-22 12:42:58.260]: Info: Desktop resolution [1920x1080]
+[2026-07-22 12:42:58.260]: Info: Desktop format [DXGI_FORMAT_B8G8R8A8_UNORM]
+[2026-07-22 12:42:58.260]: Info: Display refresh rate [143.999Hz]
+[2026-07-22 12:42:58.260]: Info: Requested frame rate [60/1 exactly 60 fps]
+[2026-07-22 12:42:58.267]: Info: Creating encoder [hevc_qsv]
+[2026-07-22 12:42:58.267]: Info: Color coding: SDR (Rec. 709)
+[2026-07-22 12:42:58.267]: Info: Color depth: 10-bit
+[2026-07-22 12:42:58.267]: Info: Color range: JPEG
+[2026-07-22 12:42:58.395]: Info: Streaming bitrate is 1000000
+[2026-07-22 12:42:58.494]: Info: 
+[2026-07-22 12:42:58.494]: Info: // Ignore any errors mentioned above, they are not relevant. //
+[2026-07-22 12:42:58.494]: Info: 
+[2026-07-22 12:42:58.494]: Info: Found H.264 encoder: h264_qsv [quicksync]
+[2026-07-22 12:42:58.494]: Info: Found HEVC encoder: hevc_qsv [quicksync]
+[2026-07-22 12:42:58.495]: Info: Starting system tray
+[2026-07-22 12:42:58.495]: Info: System tray thread initialized successfully
+[2026-07-22 12:42:58.495]: Info: No main thread features enabled, skipping event loop
+[2026-07-22 12:42:58.495]: Info: System tray thread started
+[2026-07-22 12:42:58.507]: Info: Configuration UI available at [https://localhost:47990]
+[2026-07-22 12:42:58.547]: Info: System tray created
+[2026-07-22 12:42:59.280]: Info: Registered Sunshine mDNS service
+[2026-07-22 12:43:42.667]: Info: Encoder reenumeration is required
+[2026-07-22 12:43:42.668]: Info: Trying encoder [nvenc]
+[2026-07-22 12:43:42.721]: Info: 
+Device Description : Intel(R) UHD Graphics
+Device Vendor ID   : 0x00008086
+Device Device ID   : 0x00009A68
+Device Video Mem   : 128 MiB
+Device Sys Mem     : 0 MiB
+Share Sys Mem      : 8081 MiB
+Feature Level      : 0x0000B100
+Capture size       : 1920x1080
+Offset             : 0x0
+Virtual Desktop    : 1920x1080
+[2026-07-22 12:43:42.721]: Info: Active GPU has HAGS disabled
+[2026-07-22 12:43:42.721]: Info: Using realtime GPU priority
+[2026-07-22 12:43:42.721]: Info: 
+Colorspace         : DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709
+Bits Per Color     : 8
+Red Primary        : [0.639648,0.330078]
+Green Primary      : [0.299805,0.599609]
+Blue Primary       : [0.150391,0.0595703]
+White Point        : [0.3125,0.329102]
+Min Luminance      : 0.5 nits
+Max Luminance      : 270 nits
+Max Full Luminance : 270 nits
+[2026-07-22 12:43:42.721]: Info: Desktop resolution [1920x1080]
+[2026-07-22 12:43:42.722]: Info: Desktop format [DXGI_FORMAT_B8G8R8A8_UNORM]
+[2026-07-22 12:43:42.722]: Info: Display refresh rate [143.999Hz]
+[2026-07-22 12:43:42.722]: Info: Requested frame rate [60/1 exactly 60 fps]
+[2026-07-22 12:43:42.728]: Info: Encoder [nvenc] is not supported on this GPU
+[2026-07-22 12:43:42.734]: Error: Couldn't find any working encoder matching [nvenc]
+[2026-07-22 12:43:42.734]: Info: // Testing for available encoders, this may generate errors. You can safely ignore those errors. //
+[2026-07-22 12:43:42.734]: Info: Trying encoder [quicksync]
+[2026-07-22 12:43:42.782]: Info: 
+Device Description : Intel(R) UHD Graphics
+Device Vendor ID   : 0x00008086
+Device Device ID   : 0x00009A68
+Device Video Mem   : 128 MiB
+Device Sys Mem     : 0 MiB
+Share Sys Mem      : 8081 MiB
+Feature Level      : 0x0000B100
+Capture size       : 1920x1080
+Offset             : 0x0
+Virtual Desktop    : 1920x1080
+[2026-07-22 12:43:42.782]: Info: Active GPU has HAGS disabled
+[2026-07-22 12:43:42.782]: Info: Using realtime GPU priority
+[2026-07-22 12:43:42.782]: Info: 
+Colorspace         : DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709
+Bits Per Color     : 8
+Red Primary        : [0.639648,0.330078]
+Green Primary      : [0.299805,0.599609]
+Blue Primary       : [0.150391,0.0595703]
+White Point        : [0.3125,0.329102]
+Min Luminance      : 0.5 nits
+Max Luminance      : 270 nits
+Max Full Luminance : 270 nits
+[2026-07-22 12:43:42.783]: Info: Desktop resolution [1920x1080]
+[2026-07-22 12:43:42.783]: Info: Desktop format [DXGI_FORMAT_B8G8R8A8_UNORM]
+[2026-07-22 12:43:42.783]: Info: Display refresh rate [143.999Hz]
+[2026-07-22 12:43:42.783]: Info: Requested frame rate [60/1 exactly 60 fps]
+[2026-07-22 12:43:42.790]: Info: Creating encoder [h264_qsv]
+[2026-07-22 12:43:42.790]: Info: Color coding: SDR (Rec. 601)
+[2026-07-22 12:43:42.790]: Info: Color depth: 8-bit
+[2026-07-22 12:43:42.790]: Info: Color range: JPEG
+[2026-07-22 12:43:42.949]: Info: Streaming bitrate is 1000000
+[2026-07-22 12:43:42.989]: Info: Creating encoder [hevc_qsv]
+[2026-07-22 12:43:42.989]: Info: Color coding: SDR (Rec. 601)
+[2026-07-22 12:43:42.989]: Info: Color depth: 8-bit
+[2026-07-22 12:43:42.989]: Info: Color range: JPEG
+[2026-07-22 12:43:43.139]: Info: Streaming bitrate is 1000000
+[2026-07-22 12:43:43.253]: Info: Creating encoder [av1_qsv]
+[2026-07-22 12:43:43.253]: Info: Color coding: SDR (Rec. 601)
+[2026-07-22 12:43:43.253]: Info: Color depth: 8-bit
+[2026-07-22 12:43:43.253]: Info: Color range: JPEG
+[2026-07-22 12:43:43.397]: Info: Streaming bitrate is 1000000
+[2026-07-22 12:43:43.400]: Error: [av1_qsv @ 000002ccaa31b940] Error querying encoder params: unsupported (-3)
+[2026-07-22 12:43:43.402]: Error: Could not open codec [av1_qsv]: Function not implemented
+[2026-07-22 12:43:43.465]: Info: 
+Device Description : Intel(R) UHD Graphics
+Device Vendor ID   : 0x00008086
+Device Device ID   : 0x00009A68
+Device Video Mem   : 128 MiB
+Device Sys Mem     : 0 MiB
+Share Sys Mem      : 8081 MiB
+Feature Level      : 0x0000B100
+Capture size       : 1920x1080
+Offset             : 0x0
+Virtual Desktop    : 1920x1080
+[2026-07-22 12:43:43.465]: Info: Active GPU has HAGS disabled
+[2026-07-22 12:43:43.465]: Info: Using realtime GPU priority
+[2026-07-22 12:43:43.465]: Info: 
+Colorspace         : DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709
+Bits Per Color     : 8
+Red Primary        : [0.639648,0.330078]
+Green Primary      : [0.299805,0.599609]
+Blue Primary       : [0.150391,0.0595703]
+White Point        : [0.3125,0.329102]
+Min Luminance      : 0.5 nits
+Max Luminance      : 270 nits
+Max Full Luminance : 270 nits
+[2026-07-22 12:43:43.466]: Info: Desktop resolution [1920x1080]
+[2026-07-22 12:43:43.466]: Info: Desktop format [DXGI_FORMAT_B8G8R8A8_UNORM]
+[2026-07-22 12:43:43.466]: Info: Display refresh rate [143.999Hz]
+[2026-07-22 12:43:43.466]: Info: Requested frame rate [60/1 exactly 60 fps]
+[2026-07-22 12:43:43.473]: Info: Creating encoder [hevc_qsv]
+[2026-07-22 12:43:43.473]: Info: Color coding: SDR (Rec. 709)
+[2026-07-22 12:43:43.473]: Info: Color depth: 10-bit
+[2026-07-22 12:43:43.473]: Info: Color range: JPEG
+[2026-07-22 12:43:43.608]: Info: Streaming bitrate is 1000000
+[2026-07-22 12:43:43.719]: Info: 
+[2026-07-22 12:43:43.719]: Info: // Ignore any errors mentioned above, they are not relevant. //
+[2026-07-22 12:43:43.720]: Info: 
+[2026-07-22 12:43:43.720]: Info: Found H.264 encoder: h264_qsv [quicksync]
+[2026-07-22 12:43:43.720]: Info: Found HEVC encoder: hevc_qsv [quicksync]
+[2026-07-22 12:43:43.720]: Info: Executing [Desktop]
+[2026-07-22 12:43:43.827]: Info: New streaming session started [active sessions: 1]
+[2026-07-22 12:43:44.000]: Info: nvprefs: No need to modify application profile settings
+[2026-07-22 12:43:44.000]: Info: nvprefs: No need to modify global profile settings
+[2026-07-22 12:43:44.051]: Info: CLIENT CONNECTED
+[2026-07-22 12:43:44.129]: Info: 
+Device Description : Intel(R) UHD Graphics
+Device Vendor ID   : 0x00008086
+Device Device ID   : 0x00009A68
+Device Video Mem   : 128 MiB
+Device Sys Mem     : 0 MiB
+Share Sys Mem      : 8081 MiB
+Feature Level      : 0x0000B100
+Capture size       : 1920x1080
+Offset             : 0x0
+Virtual Desktop    : 1920x1080
+[2026-07-22 12:43:44.130]: Info: Active GPU has HAGS disabled
+[2026-07-22 12:43:44.130]: Info: Using realtime GPU priority
+[2026-07-22 12:43:44.130]: Info: 
+Colorspace         : DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709
+Bits Per Color     : 8
+Red Primary        : [0.639648,0.330078]
+Green Primary      : [0.299805,0.599609]
+Blue Primary       : [0.150391,0.0595703]
+White Point        : [0.3125,0.329102]
+Min Luminance      : 0.5 nits
+Max Luminance      : 270 nits
+Max Full Luminance : 270 nits
+[2026-07-22 12:43:44.130]: Info: Desktop resolution [1920x1080]
+[2026-07-22 12:43:44.130]: Info: Desktop format [DXGI_FORMAT_B8G8R8A8_UNORM]
+[2026-07-22 12:43:44.130]: Info: Display refresh rate [143.999Hz]
+[2026-07-22 12:43:44.130]: Info: Requested frame rate [60fps]
+[2026-07-22 12:43:44.137]: Info: Creating encoder [h264_qsv]
+[2026-07-22 12:43:44.137]: Info: Color coding: SDR (Rec. 601)
+[2026-07-22 12:43:44.137]: Info: Color depth: 8-bit
+[2026-07-22 12:43:44.137]: Info: Color range: MPEG
+[2026-07-22 12:43:44.154]: Info: Capture format [DXGI_FORMAT_B8G8R8A8_UNORM]
+[2026-07-22 12:43:44.288]: Info: Streaming bitrate is 10988000
+[2026-07-22 12:43:44.306]: Info: Minimum FPS target set to ~30fps (33.3333ms)
+[2026-07-22 12:43:46.843]: Info: Successfully installed Steam Streaming Speakers
+[2026-07-22 12:43:51.865]: Info: Virtual audio device will use 16-bit to match default device
+[2026-07-22 12:43:51.912]: Info: Changed virtual audio sink format to [S16 48000 2.0]
+[2026-07-22 12:43:51.929]: Info: Audio mixer format is 32-bit, 48000 Hz, no resampling needed
+[2026-07-22 12:43:51.942]: Info: Audio capture format is [F32 48000 2.0]
+[2026-07-22 12:43:51.945]: Info: Opus initialized: 48 kHz, 2 channels, 512 kbps (total), LOWDELAY
+[2026-07-22 12:45:05.939]: Info: CLIENT DISCONNECTED

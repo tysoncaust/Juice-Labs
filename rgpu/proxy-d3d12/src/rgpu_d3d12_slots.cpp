@@ -6,6 +6,7 @@
 #define CINTERFACE
 #include <windows.h>
 #include <d3d12.h>
+#include <d3d11.h>
 #include <dxgi1_2.h>
 #include <cstddef>
 
@@ -31,6 +32,18 @@ unsigned RGPU_SLOT_GCL6_DispatchMesh         = SLOT(ID3D12GraphicsCommandList6Vt
 unsigned RGPU_SLOT_GCL7_Barrier              = SLOT(ID3D12GraphicsCommandList7Vtbl, Barrier);         /* enhanced barriers (UE5 5.x) */
 unsigned RGPU_SLOT_Factory_CreateDevice      = SLOT(ID3D12DeviceFactoryVtbl, CreateDevice);
 unsigned RGPU_SLOT_SDKConfig1_CreateDeviceFactory = SLOT(ID3D12SDKConfiguration1Vtbl, CreateDeviceFactory);
+/* D3D11On12 diagnostic coverage. Two draw slots are not enough to rule out D3D11:
+ * UE and middleware may use instanced/indirect draws, compute, or deferred contexts. */
+unsigned RGPU_SLOT_D11_DrawIndexed                  = SLOT(ID3D11DeviceContextVtbl, DrawIndexed);
+unsigned RGPU_SLOT_D11_Draw                         = SLOT(ID3D11DeviceContextVtbl, Draw);
+unsigned RGPU_SLOT_D11_DrawIndexedInstanced         = SLOT(ID3D11DeviceContextVtbl, DrawIndexedInstanced);
+unsigned RGPU_SLOT_D11_DrawInstanced                = SLOT(ID3D11DeviceContextVtbl, DrawInstanced);
+unsigned RGPU_SLOT_D11_DrawAuto                     = SLOT(ID3D11DeviceContextVtbl, DrawAuto);
+unsigned RGPU_SLOT_D11_DrawIndexedInstancedIndirect = SLOT(ID3D11DeviceContextVtbl, DrawIndexedInstancedIndirect);
+unsigned RGPU_SLOT_D11_DrawInstancedIndirect        = SLOT(ID3D11DeviceContextVtbl, DrawInstancedIndirect);
+unsigned RGPU_SLOT_D11_Dispatch                     = SLOT(ID3D11DeviceContextVtbl, Dispatch);
+unsigned RGPU_SLOT_D11_DispatchIndirect             = SLOT(ID3D11DeviceContextVtbl, DispatchIndirect);
+unsigned RGPU_SLOT_D11_ExecuteCommandList           = SLOT(ID3D11DeviceContextVtbl, ExecuteCommandList);
 /* DXGI swap-chain creation. For D3D12 the swap chain's `pDevice` argument is the direct
  * command QUEUE the swap chain presents from - i.e. the game's real render queue. */
 unsigned RGPU_SLOT_DXGIFactory_CreateSwapChain                = SLOT(IDXGIFactoryVtbl, CreateSwapChain);

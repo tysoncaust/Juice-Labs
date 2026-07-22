@@ -75,63 +75,105 @@ serialize + remote later.**
       export-table `CreateDevice`, canonically patched, and the clear/barrier/draw stream is
       tee'd (`draws=1` with no re-swap, proving the canonical patch beats the restore).
 
-### TXR live-capture — honest status (NOT achieved) and the exact reason
+### TXR live-capture — corrected status (capture not yet achieved)
 
-The mechanism is proven (harness), TXR is **stable** with it (renders at ~130% GPU, no
-crash — in-place patching preserves the concrete object), and the interception fires:
-`ID3D12CoreModule hooked`, `CORE_EXPORT_TABLE[00] CreateDevice hooked`, `CORE_TABLE[0]
-CreateDevice` ×4, canonical DEVICE vtable patched. But TXR's per-frame stream is still not
-captured. The exact reason, from live diagnosis:
+The wrapper/canonical-hook mechanism remains harness-proven, and TXR remains stable while
+instrumented. However, commit `cb8b089` made a diagnostic error: the generic
+`ID3D12CoreModule` export-table probe restored the entire table as soon as the first
+**device** was detected. Because device creation occurs near the beginning of startup, later
+private-table calls could never be observed. Therefore the previous statement that all
+entries were tested and produced no queue/list was not supported by the implementation.
 
-- All 4 D3D12 devices share vtbl `0x…ddefb58`; the canonical patch is applied and **reads
-  back live on every device** (`CFSslot`/`CCQslot` == our detours). Yet the game calls
-  **neither `CheckFeatureSupport` nor `CreateCommandQueue`/`CreateCommandList`** on any of
-  them across 85s of rendering. So the 4 public devices are genuinely unused at the
-  public-COM level.
-- TXR **presents through a D3D11On12 swap chain**: `CreateSwapChainForHwnd`'s `pDevice` is
-  an `ID3D11Device` (vtbl in `d3d11.dll`, `isID3D11Device=1`), created **internally by
-  d3d12.dll** (the public `D3D11On12CreateDevice` export is hooked but never called).
-- Conclusion: TXR's actual command submission runs on a queue created through
-  **D3D12Core-internal / D3D11On12-internal** paths that never invoke the public
-  `ID3D12Device`/`ID3D12CommandQueue` COM methods a vtable hook can reach.
+The corrected probe now:
 
-**Note on `fl`:** `D3D12CreateDevice`'s feature-level argument is the *minimum* (a floor),
-not the device's capability — TXR passes `FL_1_0_CORE` (0x1000) yet the device is a full
-12_x device. Never gate on it.
+- keeps all discovered private-table entries hooked after device creation;
+- counts calls per entry and records the first call to each entry;
+- examines changed pointer out-parameters **and** direct COM-interface return values;
+- stops only after a command queue is found or a bounded time/call budget expires;
+- restores the original table from a timer even if the table becomes idle;
+- accepts `RGPU_CET_PROBE_MS` and `RGPU_CET_PROBE_CALLS` for bounded diagnostics.
 
-### In-process interception is exhausted for TXR (every surface tried, all live)
+Live TXR evidence with the corrected probe shows entries `0`, `7`, `9`, `10`, `13`, and
+`14` executing during startup, with entry `10` producing a device. No command queue or
+command list was returned during the tested startup windows. This is a useful negative
+result, but it does **not** prove that every in-process interception surface is exhausted.
 
-| Interception point | Implemented | Result |
-|---|---|---|
-| D3D12 public device vtable (`CreateCommandQueue`/`List`, `CheckFeatureSupport`) | canonical patch, verified live on all 4 devices | never called |
-| D3D12 `CreateCommandQueue`/`List` **impl** functions | inline-hooked (incl. a decoder extension for the `xorps` prologue so the CCQ impl hooks) — catches BOTH public and internal callers | never called |
-| `ID3D12CoreModule` export table (~18 entries) | generic 8-arg forwarders detecting queue/list/device out-params | only produces **devices** |
-| DXGI `CreateSwapChain*` `pDevice` | hooked | it is an **`ID3D11Device`** (D3D11On12), not a D3D12 queue |
-| `d3d11!D3D11On12CreateDevice` | inline-hooked | never called (d3d12.dll creates it internally) |
-| D3D11On12 immediate-context `Draw`/`DrawIndexed` | vtable-patched | never called |
+The D3D11On12 test was also expanded. The earlier probe watched only `Draw` and
+`DrawIndexed`; it now watches ten SDK-derived `ID3D11DeviceContext` work methods covering
+direct, instanced, indirect, compute, and deferred-context submission.
 
-TXR's command stream is issued through **D3D12Core-internal constructors** that bypass
-every public COM method, implementation function, module export, and the D3D11 immediate
-context — beyond standard in-process COM/vtable/impl hooking.
+The final isolated 30-second TXR run recorded an exact startup burst of **82 calls**:
 
-## Remaining options (to capture TXR specifically)
+```text
+Dispatch=58
+DrawIndexed=9
+DrawIndexedInstanced=14
+DrawInstanced=1
+all other probed work methods=0
+```
 
-1. **Deep D3D12Core binary RE** — disassemble the Agility `D3D12Core.dll` to locate its
-   internal command-queue / command-list constructors and `ExecuteCommandLists`, and hook
-   those functions directly. The only path that reaches the actual command stream, but it is
-   version-specific reverse engineering of a proprietary binary.
-2. **Present-based video capture** (playable now, not a command tee) — acquire the
-   presentation surface at swap-chain creation and copy the back buffer at `Present` for a
-   video + input stream. Independent of the internal command path.
-3. **Handle translation + remote** (unchanged, for whichever capture lands): GPU VA →
-   resource id+offset; descriptor handle → heap id+index; COM ptr → object id; mapped memory
-   → byte ranges; fence → queue/fence id+value. Then tee → local replay → **remote Windows
-   D3D12** backend → Linux Vulkan last.
+The burst included meaningful compute dimensions such as `40960x1x1`, `128x128x1`,
+`240x135x1`, and graphics draws. This decisively disproves the previous claim that the
+D3D11On12 immediate context never submits work. The calls were concentrated during startup
+and did not reach the next 100-call telemetry milestone, so they do **not** yet prove that
+sustained gameplay frames are rendered entirely through this context.
 
-The CoreModule export-table route + canonical/impl in-place patching + DXGI/D3D11On12
-acquisition are correct and harness-verified; they capture titles that create command
-objects through any public or implementation-level entry point. TXR routes entirely through
-D3D12Core internals.
+| Interception point | Current evidence |
+|---|---|
+| Public D3D12 device creation methods | Hooks install; no TXR queue/list creation call observed |
+| Known device method implementation bodies | All four queue/list creation bodies inline-hook, including base `CreateCommandList`; none is called in the tested window |
+| `ID3D12CoreModule` private export table | Corrected bounded probe observes entries 0/7/9/10/13/14; entry 10 yields a device; no queue/list seen |
+| DXGI swap-chain `pDevice` | QIs as an `ID3D11Device`, not an `ID3D12CommandQueue` |
+| D3D11On12 work submission | Exact startup burst: 82 compute/graphics calls; sustained per-frame role remains unproven |
+| Controlled harness | Passes: `ExecuteCommandLists`, barriers, clear, and draw are captured |
+
+The custom proxy evidence remains narrow: **its D3D12 COM/private-table probes have not
+acquired TXR's live D3D12 submission object.** However, two independent findings invalidate
+the earlier "D3D12Core internals are the only route" conclusion:
+
+1. The expanded in-process probe captures real D3D11On12 compute and graphics work.
+2. A bounded RenderDoc 1.44 run registered D3D12 hooks, observed the NVIDIA RTX 3050 D3D12
+   device, associated a frame capturer with TXR's swap-chain window, logged `Starting
+   capture`, then `Finished capture, Frame 2`, and reported DXIL use.
+
+RenderDoc also observed a private/unknown device-interface query for GUID
+`{1f052807-0b46-4acc-8a89-364f793718a4}`. Its generated `.rdc` was **not** a valid replayable
+capture: the log recorded `Stream created with invalid file handle`, the thumbnail command
+reported that the container had no frame capture, and a later attempt was corrupted. Invalid
+containers were deleted and are not acceptance artifacts.
+
+The next research route is therefore evidence-driven and uses standard interfaces:
+
+- extend the acquired D3D11On12 device/context capture from work methods to the full state,
+  resource, view, shader, map/update, synchronization, and presentation object graph;
+- compare rgpu's D3D12 identity, private-`QueryInterface`, child-object wrapping, swap-chain
+  registration, and lifetime behavior with RenderDoc's open-source wrapper;
+- correlate either path with actual `Present` boundaries before declaring a sustained frame
+  stream captured.
+
+Blind proprietary `D3D12Core.dll` constructor disassembly is not justified. Concise RenderDoc
+evidence is in `test/evidence/renderdoc-txr-diagnostic-20260722.txt`; the final isolated rgpu
+evidence is in `test/evidence/txr-rgpu-20260722-132010.log`.
+
+## Recovery sequence
+
+1. Keep both controlled acceptance gates passing: the inline-hook relocation test and the
+   D3D12 command-stream harness.
+2. Treat the exact 82-call D3D11On12 startup burst as a proven capture surface. Expand it to
+   complete D3D11 state/resource serialization and correlate calls with `Present`.
+3. Compare rgpu against RenderDoc's open-source D3D12 implementation, focusing on the observed
+   private interface, Agility acquisition, COM identity, child wrapping, swap-chain
+   association, and lifetimes.
+4. Add a TXR regression that requires work associated with repeated presented frames—not only
+   startup calls—and records enough object/state data for deterministic local replay.
+5. Only after a complete local replay succeeds should resource-handle translation and remote
+   Windows D3D12/Vulkan replay resume. Do not guess proprietary constructor offsets.
+
+This frontend is still a **diagnostic and serialization prototype**, not a complete remote
+D3D12 runtime. A real TXR remote renderer additionally requires complete lifetime and state
+coverage for resources, heaps, descriptors, root signatures, PSOs/shaders, mapped memory,
+GPU virtual addresses, indirect arguments, queries, fences, residency, enhanced barriers,
+and device-loss behavior.
 
 ## Full D3D12 COM wrapper (harness-verified reference)
 
@@ -143,11 +185,27 @@ pure-COM device; it is **not** used for the TXR live path (substituting the devi
 crashes D3D12Core's concrete-layout code — the shadow/canonical in-place path above is used
 instead).
 
-## Build / deploy
+## Build / bounded TXR probe
 
-`build_d3d12.ps1` regenerates the wrapper forwarders, builds `test\rgpu_d3d12.dll` +
-`test\rgpu_d3d12_harness.exe`, and runs the harness (the acceptance test — must print
-`RESULT: D3D12 command stream captured`). Deploy: copy `rgpu_d3d12.dll` next to a D3D12
-game's `.exe` as `d3d12.dll` (for TXR: `...\TokyoXtremeRacer\Binaries\Win64\d3d12.dll`),
-launch with **no** `-d3d11`, then read `%TEMP%\rgpu_d3d12.log`. Remove the DLL to restore
-the game.
+`build_d3d12.ps1` regenerates the wrapper forwarders, builds and runs the inline-hook
+test, then builds `test\rgpu_d3d12.dll` + `test\rgpu_d3d12_harness.exe` and runs the
+D3D12 harness. The required acceptance lines are:
+
+```text
+RESULT: inline hooking works, survives vtable re-patching, and relocates short Jcc
+RESULT: D3D12 command stream captured (ExecuteCommandLists + barrier + clear + draw tee'd)
+```
+
+Use `tools\run_txr_probe.ps1` instead of manually leaving a proxy DLL in the game folder:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build_d3d12.ps1
+powershell -ExecutionPolicy Bypass -File .\tools\run_txr_probe.ps1 `
+  -GameRoot "C:\Program Files\Tokyo Xtreme Racer" `
+  -DurationSeconds 60
+```
+
+The runner deploys the built proxy, bounds the private-table probe, captures the full log
+and a filtered summary beneath `test\evidence`, stops the probe-launched game process, and
+restores/removes the deployed DLL. It also recovers from an interrupted prior probe without
+overwriting an unrelated pre-existing `d3d12.dll`.
