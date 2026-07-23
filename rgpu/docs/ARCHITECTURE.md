@@ -1,5 +1,13 @@
 # rgpu — portable GPU-over-IP graphics data plane
 
+## Canonical production target (2026-07-23)
+
+The final game-facing design is a root-enumerated, render-only WDDM virtual adapter with a D3D12 UMD, displayless KMD and out-of-process transport service. The existing D3D11/D3D12 proxies remain bounded research, workload-capture and user-mode protocol prototypes; they are not the shipped interception mechanism.
+
+See `REMOTE_WDDM_ARCHITECTURE.md` for the authoritative architecture, memory/GPU-VA model, presentation alternatives, signing requirements and acceptance gates.
+
+## Research frontend and portable data plane
+
 Goal: a **CPU/RAM-only** machine runs a Windows game; a **remote, on-demand Colab
 GPU** does the rendering; frames come back to a virtual display. The open-source
 Juice fork gives us orchestration (agent/controller/juicify); the closed-source

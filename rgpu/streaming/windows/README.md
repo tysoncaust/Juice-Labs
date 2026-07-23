@@ -27,23 +27,23 @@ The current live Sunshine configuration still requests NVENC first. NVENC is uns
 Windows host launcher:
 
 ```text
-C:\Users\email\Desktop\Tokyo Xtreme Racer - Remote.cmd
+C:\Users\email\AppData\Local\Programs\Tokyo Xtreme Racer Remote\Tokyo Xtreme Racer - Remote.cmd
 ```
 
-It validates the game path and refuses to launch if an rgpu diagnostic `d3d12.dll` was accidentally left beside the game executable.
+A searchable Start Menu entry is installed at **Juice Labs > Tokyo Xtreme Racer Remote**. The launcher validates the game path and refuses to launch if an rgpu diagnostic `d3d12.dll` was accidentally left beside the game executable.
 
 MacBook launcher:
 
 ```text
-/Users/macbook/Desktop/Tokyo Xtreme Racer Remote.command
+/Users/macbook/Applications/Tokyo Xtreme Racer Remote.command
 ```
 
 It opens a fullscreen 1080p/60 H.264 Moonlight Desktop stream to host `Laptop`.
 
 ## Start a playable session
 
-1. Double-click **Tokyo Xtreme Racer Remote.command** on the MacBook.
-2. In the streamed Windows desktop, double-click **Tokyo Xtreme Racer - Remote.cmd**.
+1. Open the MacBook **Applications** folder and double-click **Tokyo Xtreme Racer Remote.command**.
+2. In the streamed Windows desktop, open Start, search for **Tokyo Xtreme Racer Remote**, and launch the entry under **Juice Labs**.
 3. Play normally. Closing Moonlight ends the client session; closing TXR leaves the Desktop stream available because it was launched through Sunshine's Desktop application.
 
 Equivalent Moonlight CLI command:
@@ -88,4 +88,4 @@ The 33.84 FPS session-wide average includes static desktop/startup periods and d
 
 This streaming path runs the game on the Windows host. It is not the separate research goal where the game process runs on a CPU-only Windows client while a remote GPU executes a virtualized D3D12 object/command stream.
 
-That research path still requires complete resource, descriptor, GPU virtual-address, shader/PSO, synchronization, residency, lifetime, query, indirect-command, and device-loss semantics. See `../../docs/TXR_RECOVERY_PLAN.md` and `../../proxy-d3d12/README.md`.
+That research path still requires complete resource, descriptor, GPU virtual-address, shader/PSO, synchronization, residency, lifetime, query, indirect-command, and device-loss semantics. See `../../docs/REMOTE_WDDM_ARCHITECTURE.md`, `../../docs/TXR_RECOVERY_PLAN.md`, and `../../proxy-d3d12/README.md`.

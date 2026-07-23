@@ -1,6 +1,6 @@
 # Tokyo Xtreme Racer / GPU-over-IP recovery plan
 
-Status date: 2026-07-22
+Status date: 2026-07-23
 
 ## Executive decision
 
@@ -12,6 +12,20 @@ The original goal contains two different products:
 The first product is now verified end to end with Sunshine and Moonlight. The second remains a substantial graphics-runtime project and is not completed by intercepting a few draw calls or copying frames at `Present`.
 
 Google Colab is retained for bounded Vulkan, encoding, and protocol experiments. It is not the production host for TXR because the managed environment is Linux and ephemeral, while the closed-source game requires its Windows executable, D3D12/Agility runtime, Windows driver stack, persistent installation, and interactive session to remain together.
+
+## Canonical production architecture
+
+The final GPU-over-IP product is a **root-enumerated, render-only WDDM virtual adapter** on the bare-metal Windows client. The existing `d3d12.dll` proxy is now explicitly a Phase-1 research instrument used to discover TXR's actual D3D12 workload; it is not the production deployment mechanism.
+
+The production frontend consists of a D3D12 UMD, a displayless render-only KMD and a user-mode transport service. The service communicates with a portable Linux/Vulkan executor using a versioned D3D12-semantic protocol. Network operations, authentication, compression and reconnection remain outside kernel callbacks. The adapter fails through a defined device-removal path rather than silently falling back to local hardware.
+
+The complete design, difficult memory/address cases, acceptance gates and phased build order are in:
+
+```text
+rgpu/docs/REMOTE_WDDM_ARCHITECTURE.md
+```
+
+Sunshine/Moonlight remains the verified way to play immediately, but it is an operational fallback and validation path—not completion of the virtual GPU.
 
 References:
 
@@ -197,14 +211,14 @@ rgpu/streaming/windows/evidence/sunshine-live-session-20260722.log
 Installed launchers:
 
 ```text
-Windows: C:\Users\email\Desktop\Tokyo Xtreme Racer - Remote.cmd
-Mac:     /Users/macbook/Desktop/Tokyo Xtreme Racer Remote.command
+Windows: C:\Users\email\AppData\Local\Programs\Tokyo Xtreme Racer Remote\Tokyo Xtreme Racer - Remote.cmd
+Mac:     /Users/macbook/Applications/Tokyo Xtreme Racer Remote.command
 ```
 
 Operational flow:
 
-1. Double-click the Mac launcher to start the Moonlight Desktop stream.
-2. Double-click the guarded TXR launcher inside the streamed Windows desktop.
+1. Open the MacBook Applications folder and double-click the Remote launcher to start the Moonlight Desktop stream.
+2. In the streamed Windows desktop, open Start and launch **Juice Labs > Tokyo Xtreme Racer Remote**.
 3. Play normally.
 
 A dedicated Sunshine tile is staged but not required. Applying it automatically was blocked because this MCP runs under the `power_user` profile rather than an administrator profile, and the Sunshine password SecretRef is locked. The existing Desktop application plus the two launchers is already tested and operational.
