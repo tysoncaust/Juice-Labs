@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/rgpu/evidence-schema-v1.json",
+  "title": "RemoteGPU observed compatibility evidence",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "project_commit",
+    "binary_sha256",
+    "test_id",
+    "test_date_utc",
+    "operator",
+    "game",
+    "environment",
+    "results",
+    "artifacts",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "project_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,40}$"
+    },
+    "binary_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "test_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "test_date_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "operator": {
+      "enum": [
+        "human",
+        "automated-transport-only"
+      ]
+    },
+    "mode": {
+      "enum": [
+        "passive",
+        "interactive"
+      ]
+    },
+    "game": {
+      "type": "object",
+      "required": [
+        "name",
+        "version",
+        "anti_cheat",
+        "anti_cheat_version"
+      ],
+      "properties": {
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "anti_cheat": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "anti_cheat_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "required": [
+        "windows_build",
+        "gpu",
+        "driver",
+        "capture_backend",
+        "input_mode"
+      ],
+      "properties": {
+        "windows_build": {
+          "type": "string"
+        },
+        "gpu": {
+          "type": "string"
+        },
+        "driver": {
+          "type": "string"
+        },
+        "capture_backend": {
+          "type": "string"
+        },
+        "input_mode": {
+          "enum": [
+            "disabled",
+            "software",
+            "hardware"
+          ]
+        },
+        "launcher": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "host_agent_version": {
+          "type": "string"
+        }
+      }
+    },
+    "results": {
+      "type": "object"
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "sha256"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "media_retained": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "claims": {
+      "type": "object",
+      "properties": {
+        "vendor_approval": {
+          "const": false
+        },
+        "vendor_endorsement": {
+          "const": false
+        },
+        "universal_anti_cheat_compatibility": {
+          "const": false
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}

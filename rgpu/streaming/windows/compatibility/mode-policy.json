@@ -1,0 +1,28 @@
+{
+  "schema": "rgpu-streaming-mode-policy-v1",
+  "default_mode": "passive",
+  "passive": {
+    "video": true,
+    "audio": true,
+    "input_broker_compiled": false,
+    "data_channels_allowed": [],
+    "protected_game_claim": "observed_version_specific_only"
+  },
+  "interactive": {
+    "video": true,
+    "audio": true,
+    "input_broker_compiled": true,
+    "human_input_only": true,
+    "macros": false,
+    "automation": false,
+    "recorded_sequences": false,
+    "background_input": false,
+    "requires_local_confirmation": true,
+    "requires_foreground_session": true,
+    "release_all_on_disconnect": true,
+    "per_title_allowlist": true
+  },
+  "vendor_approval_required_for_release": false,
+  "vendor_endorsement_claimed": false,
+  "universal_battleye_compatibility": "out_of_scope"
+}

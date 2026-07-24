@@ -1,0 +1,8 @@
+RemoteGPU bare-metal streaming prototype
+
+Copyright (c) 2023-2026 Juice Technologies, Inc.
+Licensed under the repository MIT License.
+
+Third-party components are not redistributed by this source tree. FFmpeg, NVIDIA drivers, VLC, SRT, libdatachannel, coturn, browser engines, and Windows SDK components retain their respective licenses and notices. Release SBOMs identify the components used by a particular build.
+
+Observed game compatibility is not publisher approval, certification, endorsement, or a promise of future compatibility.

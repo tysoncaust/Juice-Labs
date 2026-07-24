@@ -1,16 +1,25 @@
 {
-  "schema": "rgpu-protected-game-compatibility-matrix-v1",
+  "schema": "rgpu-observed-compatibility-registry-v2",
   "status_date": "2026-07-24",
+  "claim_model": {
+    "observational": true,
+    "version_specific": true,
+    "vendor_approval_required": false,
+    "vendor_endorsement_claimed": false,
+    "universal_battleye_compatibility": "out_of_scope"
+  },
   "host_architecture": {
     "operating_system": "bare-metal Windows",
     "graphics_driver": "stock Microsoft-signed NVIDIA driver",
     "custom_kmd": false,
     "virtual_graphics_adapter": false,
+    "kernel_driver": false,
+    "game_process_access": false,
     "capture": "ordinary Windows desktop capture",
-    "encoding": "NVIDIA NVENC H.264",
-    "video_transport": "MPEG-TS over UDP",
-    "client_decoder": "VLC on MacBook Air M1",
-    "input_transport": "outbound TCP proof restricted to a relay-owned test window"
+    "audio": "WASAPI loopback",
+    "encoding": "NVIDIA NVENC H.264 plus AAC",
+    "reference_transport": "AES-256 SRT",
+    "browser_transport": "WebRTC planned/native host sender incomplete"
   },
   "titles": [
     {
@@ -18,26 +27,28 @@
       "store": "Steam",
       "store_app_id": "1085660",
       "anti_cheat": "BattlEye",
-      "normal_launcher_used": true,
-      "game_process_launched": "pass",
-      "anti_cheat_service_running": "pass",
-      "game_process_survived_passive_capture": "pass",
-      "stock_nvidia_nvenc_capture": "pass",
-      "remote_mac_decode": "pass",
-      "video_retained": false,
-      "remote_keyboard_mouse_controller_in_game": "not_tested_guard_refused",
-      "online_matchmaking": "not_tested",
-      "reconnection": "not_tested",
-      "resolution_change": "not_tested",
-      "vendor_support_for_this_complete_stack": "not_confirmed",
-      "automation_guard": "protected_input_and_memory_automation_refused",
-      "recommendation": "continue_bare_metal_streaming_evaluation_do_not_advance_custom_driver_for_this_title"
+      "passive": {
+        "status": "observed_compatible",
+        "launch": "pass",
+        "anti_cheat_active": "pass",
+        "capture": "pass",
+        "remote_decode": "pass",
+        "manual_gameplay": "not_tested",
+        "matchmaking": "not_tested",
+        "pvp": "not_run",
+        "warnings_observed": 0,
+        "kicks_observed": 0,
+        "account_action_observed": 0
+      },
+      "interactive": {
+        "status": "untested",
+        "remote_input": "not_tested"
+      },
+      "material_change_policy": "previously_observed_compatible_retest_required"
     }
   ],
   "custom_driver_gate": {
-    "unmodified_client_must_see_local_d3d12_adapter": false,
-    "relevant_vendor_support_indicated": false,
-    "proceed_with_custom_driver": false,
-    "reason": "The lower-risk bare-metal remote-rendering path is operational and no vendor approval for a custom local-looking adapter has been established."
+    "proceed_with_custom_driver_for_protected_games": false,
+    "reason": "Stock-driver bare-metal streaming is the selected architecture; protected-game WDDM testing remains out of scope."
   }
 }
