@@ -1,0 +1,65 @@
+name: rgpu-streaming-prerelease
+
+on:
+
+  workflow_dispatch:
+
+  push:
+
+    tags: ['rgpu-streaming-v*']
+
+permissions:
+
+  contents: read
+
+  id-token: write
+
+  attestations: write
+
+jobs:
+
+  build-passive:
+
+    runs-on: windows-latest
+
+    steps:
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Build and validate passive package
+
+        shell: pwsh
+
+        run: |
+
+          ./rgpu/streaming/windows/compatibility/validate_compatibility.ps1
+
+          ./rgpu/streaming/windows/compatibility/build_release_bundle.ps1
+
+      - name: Upload immutable prerelease artifact
+
+        id: upload
+
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+
+        with:
+
+          name: rgpu-streaming-passive-prerelease
+
+          path: rgpu/streaming/windows/compatibility/release-out/rgpu-streaming-passive-prerelease.zip
+
+          if-no-files-found: error
+
+          retention-days: 30
+
+      - name: Attest build provenance and SPDX SBOM
+
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+
+        with:
+
+          subject-path: |
+
+            rgpu/streaming/windows/compatibility/release-out/rgpu-streaming-passive-prerelease.zip
+
+            rgpu/streaming/windows/compatibility/release-out/rgpu-streaming-passive-prerelease/sbom.spdx.json
