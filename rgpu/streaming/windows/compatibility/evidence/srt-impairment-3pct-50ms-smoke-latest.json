@@ -1,0 +1,57 @@
+{
+  "schema": "rgpu-srt-impairment-observation-v1",
+  "status": "smoke_pass",
+  "profile": "wan_degraded_smoke",
+  "test_date_utc": "2026-07-24T12:36:54.781211+00:00",
+  "duration_seconds_media": 30,
+  "duration_seconds_proxy": 100.003,
+  "seed": 20260724,
+  "configured_loss_percent": 3.0,
+  "actual_loss_percent": 2.9691,
+  "maximum_jitter_ms": 50.0,
+  "srt_latency_ms": 120,
+  "sender": {
+    "passed": true,
+    "mode": "1280x720@24",
+    "encoded_video_frames": 720,
+    "audio_frames": 1449567,
+    "video_encoder": "h264_nvenc",
+    "audio_encoder": "aac",
+    "maximum_nvenc_utilization_percent": 20,
+    "clean_completion": true
+  },
+  "receiver": {
+    "passed": true,
+    "observed_mode": "1280x720",
+    "h264_markers": 7,
+    "aac_markers": 2,
+    "video_pipeline_markers": 469,
+    "audio_pipeline_markers": 691,
+    "startup_to_h264_ms": 697.843,
+    "startup_to_video_pipeline_ms": 717.582,
+    "incorrect_passphrase_markers": 0
+  },
+  "proxy": {
+    "passed": true,
+    "received_packets": 41090,
+    "forwarded_packets": 39870,
+    "dropped_packets": 1220,
+    "maximum_queue_depth": 1177,
+    "client_to_server_dropped_packets": 69,
+    "server_to_client_dropped_packets": 1151,
+    "payload_inspection": false
+  },
+  "security_boundaries": {
+    "encrypted_srt_aes_256": true,
+    "video_retained": false,
+    "packet_payloads_retained": false,
+    "game_process_access": false,
+    "input_enabled": false
+  },
+  "limitations": [
+    "Accelerated 30-second one-seed smoke, not the required ten-minute three-seed release matrix.",
+    "VLC marker counts prove decoder and output-pipeline creation but do not provide decoded-frame continuity or maximum freeze/gap metrics.",
+    "Transport retransmission counters were not exposed by the VLC 3 receiver build.",
+    "No protected-game process was required or accessed during this network resilience test."
+  ]
+}

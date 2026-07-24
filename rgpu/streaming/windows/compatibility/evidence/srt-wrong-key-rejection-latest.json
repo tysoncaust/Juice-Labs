@@ -1,0 +1,36 @@
+{
+  "schema": "rgpu-vlc-encrypted-srt-receiver-v1",
+  "timestamp_utc": "2026-07-24T10:52:17.260931+00:00",
+  "passed": true,
+  "expect_auth_failure": true,
+  "transport": "SRT",
+  "reliable_transport": true,
+  "encryption": "AES-256 peer requested by sender; passphrase supplied to VLC",
+  "passphrase_sha256_12": "9062cb4f05cd",
+  "host": "192.168.0.204",
+  "port": 51002,
+  "timeout_seconds": 15,
+  "marker_counts": {
+    "srt_access": 196,
+    "mpeg_ts": 0,
+    "h264": 0,
+    "aac": 0,
+    "video_pipeline": 0,
+    "audio_pipeline": 4,
+    "incorrect_passphrase": 190
+  },
+  "startup_ms": {
+    "srt_access": 129.179,
+    "mpeg_ts": null,
+    "h264": null,
+    "aac": null,
+    "video_pipeline": null,
+    "audio_pipeline": 121.962,
+    "incorrect_passphrase": 183.878
+  },
+  "observed_width": null,
+  "observed_height": null,
+  "video_retained": false,
+  "game_process_access": false,
+  "log": "Mac evidence captured at /private/tmp/rgpu-vlc-srt-wrong-key.log"
+}

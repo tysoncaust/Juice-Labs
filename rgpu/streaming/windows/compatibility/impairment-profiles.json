@@ -1,0 +1,78 @@
+{
+  "schema": "rgpu-network-impairment-profile-set-v1",
+  "minimum_duration_seconds": 600,
+  "seeds": [
+    20260724,
+    20260725,
+    20260726
+  ],
+  "profiles": [
+    {
+      "id": "baseline",
+      "loss_percent": 0,
+      "maximum_jitter_ms": 0,
+      "forced_disconnect_seconds": 0
+    },
+    {
+      "id": "lan_degraded",
+      "loss_percent": 1,
+      "maximum_jitter_ms": 20,
+      "forced_disconnect_seconds": 0,
+      "pass_criteria": {
+        "terminal_disconnects": 0,
+        "maximum_video_blackout_ms": 250,
+        "maximum_audio_gap_ms": 150
+      }
+    },
+    {
+      "id": "wan_degraded",
+      "loss_percent": 3,
+      "maximum_jitter_ms": 50,
+      "forced_disconnect_seconds": 0,
+      "pass_criteria": {
+        "terminal_disconnects": 0,
+        "maximum_outage_ms": 500,
+        "unbounded_latency_growth": false
+      }
+    },
+    {
+      "id": "stress",
+      "loss_percent": 5,
+      "maximum_jitter_ms": 100,
+      "forced_disconnect_seconds": 0
+    },
+    {
+      "id": "disconnect",
+      "loss_percent": 0,
+      "maximum_jitter_ms": 50,
+      "forced_disconnect_seconds": 3,
+      "pass_criteria": {
+        "authenticated_recovery_ms": 2000,
+        "input_state_reset_before_reconnect": true
+      }
+    }
+  ],
+  "required_metrics": [
+    "session_id",
+    "seed",
+    "sent_packets",
+    "forwarded_packets",
+    "dropped_packets",
+    "loss_percent",
+    "jitter_configuration",
+    "transport_retransmissions",
+    "transport_drops",
+    "rtt_ms",
+    "decoded_video_frames",
+    "decoded_audio_duration_ms",
+    "maximum_video_freeze_ms",
+    "maximum_audio_gap_ms",
+    "reconnect_time_ms",
+    "result"
+  ],
+  "current_execution": {
+    "srt_smoke": "pass_one_seed_30_seconds",
+    "srt_full_matrix": "not_complete",
+    "webrtc_full_matrix": "not_runnable_native_sender_incomplete"
+  }
+}

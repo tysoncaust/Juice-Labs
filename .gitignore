@@ -37,3 +37,12 @@ profile.coverage
 
 # Bare-metal streaming compatibility build products
 /rgpu/streaming/windows/compatibility/out/
+
+# Streaming transient test output and local release bundles
+/rgpu/streaming/windows/compatibility/evidence/srt-audio-*
+/rgpu/streaming/windows/compatibility/evidence/srt-audio-ready-*
+/rgpu/streaming/windows/compatibility/evidence/srt-nvenc-dmon-*
+/rgpu/streaming/windows/compatibility/evidence/srt-sender-2026*.json
+/rgpu/streaming/windows/compatibility/evidence/srt-sender-2026*.log
+/rgpu/streaming/windows/compatibility/evidence/srt-tone-*
+/rgpu/streaming/windows/compatibility/release-out/

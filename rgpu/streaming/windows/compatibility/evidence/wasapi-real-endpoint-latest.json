@@ -1,0 +1,17 @@
+{
+  "schema": "rgpu-wasapi-real-endpoint-observation-v1",
+  "status": "pass",
+  "test_date_utc": "2026-07-24T09:52:18Z",
+  "sample_format": "f32le",
+  "sample_rate": 44100,
+  "channels": 2,
+  "captured_frames": 392047,
+  "maximum_rms_db": -35.645942,
+  "capture": "WASAPI shared-mode default-render loopback",
+  "generated_test_tone": true,
+  "process_injection": false,
+  "game_process_access": false,
+  "limitations": [
+    "Synthetic tone validated the real default Windows render endpoint and loopback path; game audio was not retained."
+  ]
+}

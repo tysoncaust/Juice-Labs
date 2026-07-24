@@ -1,0 +1,44 @@
+{
+  "schema": "rgpu-srt-reconnect-resolution-v1",
+  "timestamp_utc": "2026-07-24T10:55:33.771826Z",
+  "passed": true,
+  "transport": "SRT",
+  "encryption": "AES-256 via SRT pbkeylen=32",
+  "reliable_transport": true,
+  "same_endpoint_reused": true,
+  "endpoint": "192.168.0.204:51001",
+  "same_passphrase_hash": "6695d1f461b9",
+  "disconnect_between_sessions": true,
+  "reconnection_proven": true,
+  "resolution_renegotiation_proven": true,
+  "sessions": [
+    {
+      "mode": "1280x720@24",
+      "sender_started_utc": "2026-07-24T10:49:04.0676178Z",
+      "sender_completed_utc": "2026-07-24T10:49:21.3589813Z",
+      "sender_frames": 192,
+      "audio_frames": 571086,
+      "receiver_h264_markers": 7,
+      "receiver_aac_markers": 2,
+      "startup_to_h264_ms": 1148.135,
+      "startup_to_video_pipeline_ms": 1167.247,
+      "passed": true
+    },
+    {
+      "mode": "1600x900@24",
+      "sender_started_utc": "2026-07-24T10:54:43.8877272Z",
+      "sender_completed_utc": "2026-07-24T10:55:05.3454007Z",
+      "sender_frames": 192,
+      "audio_frames": 573300,
+      "receiver_h264_markers": 7,
+      "receiver_aac_markers": 2,
+      "startup_to_h264_ms": 661.351,
+      "startup_to_video_pipeline_ms": 679.718,
+      "passed": true
+    }
+  ],
+  "video_retained": false,
+  "custom_graphics_driver": false,
+  "virtual_display": false,
+  "game_process_access": false
+}
