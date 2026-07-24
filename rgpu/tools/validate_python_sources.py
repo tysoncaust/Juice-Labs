@@ -9,6 +9,7 @@ FILES=[
  ROOT/'renderd'/'rgpu_agent.py',
  ROOT/'colab'/'rgpu_probe.py',
  ROOT/'colab'/'run_phase2_colab.py',
+ ROOT/'streaming'/'windows'/'compatibility'/'input_client.py',
 ]
 for path in FILES:
     ast.parse(path.read_text(encoding='utf-8-sig'), filename=str(path))

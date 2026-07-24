@@ -34,3 +34,6 @@ profile.coverage
 /rgpu/renderd/linux/phase2/out-colab/
 /rgpu/wddm/phase3/out/RemoteGpuDxgkKmd.sys
 /rgpu/wddm/phase3/out/RemoteGpuDxgkKmd.obj
+
+# Bare-metal streaming compatibility build products
+/rgpu/streaming/windows/compatibility/out/

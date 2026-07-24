@@ -1,0 +1,46 @@
+[in#0 @ 00000228b5b84fc0] Capturing whole desktop as 1920x1080x32 at (0,0)
+[in#0/gdigrab @ 00000228b5b84fc0] Stream #0: not enough frames to estimate rate; consider increasing probesize
+Input #0, gdigrab, from 'desktop':
+  Duration: N/A, start: 1784882371.690689, bitrate: 1990668 kb/s
+  Stream #0:0: Video: bmp, bgra, 1920x1080, 1990668 kb/s, 30 fps, 1000k tbr, 1000k tbn, start 1784882371.690689
+Stream mapping:
+  Stream #0:0 -> #0:0 (bmp (native) -> h264 (h264_nvenc))
+Press [q] to stop, [?] for help
+Output #0, null, to 'NUL':
+  Metadata:
+    encoder         : Lavf62.12.102
+  Stream #0:0: Video: h264 (Main), yuv420p(tv, progressive), 1280x720, q=2-31, 8000 kb/s, 30 fps, 30 tbn
+    Metadata:
+      encoder         : Lavc62.28.102 h264_nvenc
+    Side data:
+      CPB properties: bitrate max/min/avg: 8000000/0/8000000 buffer size: 800000 vbv_delay: N/A
+frame=    7 fps=0.0 q=6.0 size=N/A time=00:00:00.43 bitrate=N/A speed=0.845x elapsed=0:00:00.51    [null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 15 >= 15
+frame=   20 fps= 20 q=2.0 size=N/A time=00:00:00.96 bitrate=N/A speed=0.943x elapsed=0:00:01.02    frame=   32 fps= 21 q=6.0 size=N/A time=00:00:01.46 bitrate=N/A speed=0.953x elapsed=0:00:01.53    [null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 45 >= 45
+frame=   43 fps= 21 q=2.0 size=N/A time=00:00:01.96 bitrate=N/A speed=0.957x elapsed=0:00:02.05    [null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 61 >= 61
+frame=   53 fps= 21 q=2.0 size=N/A time=00:00:02.43 bitrate=N/A speed=0.948x elapsed=0:00:02.56    [null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 89 >= 89
+[null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 91 >= 91
+frame=   67 fps= 22 q=2.0 size=N/A time=00:00:03.03 bitrate=N/A speed=0.985x elapsed=0:00:03.08    [null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 103 >= 103
+frame=   78 fps= 22 q=2.0 size=N/A time=00:00:03.43 bitrate=N/A speed=0.952x elapsed=0:00:03.60    [null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 119 >= 119
+[null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 121 >= 121
+frame=   93 fps= 23 q=5.0 size=N/A time=00:00:04.03 bitrate=N/A speed=0.98x elapsed=0:00:04.11    [null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 133 >= 133
+[null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 136 >= 136
+frame=  107 fps= 23 q=2.0 size=N/A time=00:00:04.56 bitrate=N/A speed=0.984x elapsed=0:00:04.64    [null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 147 >= 147
+[null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 149 >= 149
+[null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 152 >= 152
+frame=  121 fps= 23 q=11.0 size=N/A time=00:00:05.06 bitrate=N/A speed=0.983x elapsed=0:00:05.15    [null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 163 >= 163
+[null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 165 >= 165
+[null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 167 >= 167
+frame=  134 fps= 24 q=2.0 size=N/A time=00:00:05.60 bitrate=N/A speed=0.988x elapsed=0:00:05.66    [null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 179 >= 179
+frame=  146 fps= 24 q=2.0 size=N/A time=00:00:06.06 bitrate=N/A speed=0.982x elapsed=0:00:06.17    [null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 196 >= 196
+frame=  157 fps= 23 q=2.0 size=N/A time=00:00:06.56 bitrate=N/A speed=0.98x elapsed=0:00:06.70    frame=  166 fps= 23 q=2.0 size=N/A time=00:00:07.06 bitrate=N/A speed=0.979x elapsed=0:00:07.21    frame=  176 fps= 23 q=2.0 size=N/A time=00:00:07.66 bitrate=N/A speed=0.992x elapsed=0:00:07.72    frame=  186 fps= 23 q=2.0 size=N/A time=00:00:08.13 bitrate=N/A speed=0.987x elapsed=0:00:08.24    [null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 254 >= 254
+[null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 256 >= 256
+frame=  198 fps= 23 q=2.0 size=N/A time=00:00:08.63 bitrate=N/A speed=0.986x elapsed=0:00:08.75    [null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 271 >= 271
+frame=  212 fps= 23 q=7.0 size=N/A time=00:00:09.16 bitrate=N/A speed=0.988x elapsed=0:00:09.27    [null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 287 >= 287
+frame=  226 fps= 23 q=2.0 size=N/A time=00:00:09.70 bitrate=N/A speed=0.991x elapsed=0:00:09.79    frame=  240 fps= 23 q=2.0 size=N/A time=00:00:10.23 bitrate=N/A speed=0.993x elapsed=0:00:10.30    [null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 317 >= 317
+frame=  253 fps= 23 q=2.0 size=N/A time=00:00:10.80 bitrate=N/A speed=0.997x elapsed=0:00:10.82    [null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 331 >= 331
+frame=  266 fps= 23 q=2.0 size=N/A time=00:00:11.26 bitrate=N/A speed=0.993x elapsed=0:00:11.34    frame=  277 fps= 23 q=2.0 size=N/A time=00:00:11.76 bitrate=N/A speed=0.993x elapsed=0:00:11.85    frame=  290 fps= 23 q=2.0 size=N/A time=00:00:12.30 bitrate=N/A speed=0.995x elapsed=0:00:12.36    frame=  303 fps= 24 q=5.0 size=N/A time=00:00:12.86 bitrate=N/A speed=0.998x elapsed=0:00:12.89    frame=  314 fps= 23 q=2.0 size=N/A time=00:00:13.36 bitrate=N/A speed=0.997x elapsed=0:00:13.40    frame=  326 fps= 23 q=2.0 size=N/A time=00:00:13.86 bitrate=N/A speed=0.996x elapsed=0:00:13.91    [null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 422 >= 422
+frame=  338 fps= 23 q=2.0 size=N/A time=00:00:14.36 bitrate=N/A speed=0.995x elapsed=0:00:14.43    frame=  350 fps= 23 q=2.0 size=N/A time=00:00:14.86 bitrate=N/A speed=0.995x elapsed=0:00:14.94    [null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 452 >= 452
+frame=  362 fps= 23 q=7.0 size=N/A time=00:00:15.33 bitrate=N/A speed=0.991x elapsed=0:00:15.46    frame=  372 fps= 23 q=2.0 size=N/A time=00:00:15.83 bitrate=N/A speed=0.991x elapsed=0:00:15.97    frame=  381 fps= 23 q=2.0 size=N/A time=00:00:16.36 bitrate=N/A speed=0.992x elapsed=0:00:16.49    frame=  390 fps= 23 q=2.0 size=N/A time=00:00:16.90 bitrate=N/A speed=0.994x elapsed=0:00:17.00    frame=  399 fps= 23 q=2.0 size=N/A time=00:00:17.43 bitrate=N/A speed=0.995x elapsed=0:00:17.51    frame=  410 fps= 23 q=2.0 size=N/A time=00:00:17.96 bitrate=N/A speed=0.996x elapsed=0:00:18.04    [null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 542 >= 542
+frame=  420 fps= 23 q=2.0 size=N/A time=00:00:18.46 bitrate=N/A speed=0.995x elapsed=0:00:18.55    frame=  433 fps= 23 q=2.0 size=N/A time=00:00:19.03 bitrate=N/A speed=0.998x elapsed=0:00:19.06    frame=  445 fps= 23 q=2.0 size=N/A time=00:00:19.56 bitrate=N/A speed=0.999x elapsed=0:00:19.58    [null @ 00000228b5c24180] Application provided invalid, non monotonically increasing dts to muxer in stream 0: 587 >= 587
+[out#0/null @ 00000228b5ba34c0] video:14746KiB audio:0KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: unknown
+frame=  453 fps= 23 q=5.0 Lsize=N/A time=00:00:19.93 bitrate=N/A speed=0.998x elapsed=0:00:19.97    

@@ -1,0 +1,36 @@
+﻿{
+    "schema":  "rgpu-passive-protected-game-test-v1",
+    "timestamp_utc":  "2026-07-24T08:39:55.0016450Z",
+    "game":  "Destiny 2",
+    "game_process_name":  "destiny2",
+    "initial_pids":  [
+                         25432
+                     ],
+    "final_pids":  [
+                       25432
+                   ],
+    "same_process_alive_after_capture":  true,
+    "anti_cheat":  "BattlEye",
+    "observed_battleye_process_names":  [
+                                            "BEService",
+                                            "destiny2launcher"
+                                        ],
+    "battleye_service_status":  "Running",
+    "passive_capture_passed":  true,
+    "capture_sink":  "null_no_video_retained",
+    "capture":  "Windows GDI desktop capture",
+    "encoder":  "h264_nvenc",
+    "encoded_frames":  453,
+    "maximum_nvenc_utilization_percent":  7,
+    "ffmpeg_exit_code":  null,
+    "ffmpeg_clean_completion_marker":  true,
+    "remote_input_attempted":  false,
+    "process_memory_access_attempted":  false,
+    "process_injection_attempted":  false,
+    "anti_cheat_modification_attempted":  false,
+    "matchmaking_tested":  false,
+    "vendor_support_confirmed":  false,
+    "passed":  true,
+    "ffmpeg_log":  "C:\\Users\\email\\Documents\\Development\\Juice-Labs\\rgpu\\streaming\\windows\\compatibility\\evidence\\passive-destiny2-20260724-183930.log",
+    "nvidia_dmon":  "C:\\Users\\email\\Documents\\Development\\Juice-Labs\\rgpu\\streaming\\windows\\compatibility\\evidence\\passive-destiny2-dmon-20260724-183930.txt"
+}

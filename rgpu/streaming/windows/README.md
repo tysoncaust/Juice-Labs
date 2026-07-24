@@ -89,3 +89,7 @@ The 33.84 FPS session-wide average includes static desktop/startup periods and d
 This streaming path runs the game on the Windows host. It is not the separate research goal where the game process runs on a CPU-only Windows client while a remote GPU executes a virtualized D3D12 object/command stream.
 
 That research path still requires complete resource, descriptor, GPU virtual-address, shader/PSO, synchronization, residency, lifetime, query, indirect-command, and device-loss semantics. See `../../docs/REMOTE_WDDM_ARCHITECTURE.md`, `../../docs/TXR_RECOVERY_PLAN.md`, and `../../proxy-d3d12/README.md`.
+
+## Protected-game compatibility path
+
+For stock-driver, bare-metal streaming tests that do not install the custom WDDM adapter, see [`compatibility/`](compatibility/README.md). That prototype uses ordinary desktop capture, RTX NVENC, a Mac display endpoint, an owned-window-only input proof, and passive anti-cheat game validation.
