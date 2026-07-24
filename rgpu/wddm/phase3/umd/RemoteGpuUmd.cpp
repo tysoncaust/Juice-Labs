@@ -19,6 +19,9 @@ struct AdapterState {
     HANDLE request_event = nullptr;
     HANDLE completion_event = nullptr;
     SharedState* shared = nullptr;
+    uint32_t owner_pid = 0;
+    uint32_t client_slot = kInvalidClientSlot;
+    uint64_t generation = 0;
 };
 
 struct DeviceState {
@@ -28,6 +31,11 @@ struct DeviceState {
 
 void CloseTransport(AdapterState* adapter) {
     if (!adapter) return;
+    if (adapter->shared && adapter->client_slot < kClientCount &&
+        adapter->owner_pid != 0) {
+        unregister_client(adapter->shared, adapter->client_slot,
+                          adapter->owner_pid);
+    }
     if (adapter->shared) UnmapViewOfFile(adapter->shared);
     if (adapter->completion_event) CloseHandle(adapter->completion_event);
     if (adapter->request_event) CloseHandle(adapter->request_event);
@@ -36,9 +44,24 @@ void CloseTransport(AdapterState* adapter) {
     adapter->completion_event = nullptr;
     adapter->request_event = nullptr;
     adapter->mapping = nullptr;
+    adapter->client_slot = kInvalidClientSlot;
+}
+
+bool PushRequest(AdapterState* adapter, const Message& request,
+                 DWORD timeout_ms) {
+    const ULONGLONG deadline = GetTickCount64() + timeout_ms;
+    while (GetTickCount64() < deadline) {
+        if (try_push(&adapter->shared->requests, request)) {
+            SetEvent(adapter->request_event);
+            return true;
+        }
+        Sleep(1);
+    }
+    return false;
 }
 
 HRESULT ConnectTransport(AdapterState* adapter) {
+    adapter->owner_pid = GetCurrentProcessId();
     for (int attempt = 0; attempt < 80; ++attempt) {
         adapter->mapping = OpenFileMappingW(FILE_MAP_ALL_ACCESS, FALSE, kMappingName);
         if (adapter->mapping) break;
@@ -47,38 +70,62 @@ HRESULT ConnectTransport(AdapterState* adapter) {
     if (!adapter->mapping) return HRESULT_FROM_WIN32(ERROR_SERVICE_NOT_ACTIVE);
     adapter->shared = static_cast<SharedState*>(MapViewOfFile(
         adapter->mapping, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(SharedState)));
+    if (!adapter->shared) {
+        CloseTransport(adapter);
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
     for (int attempt = 0; attempt < 80; ++attempt) {
-        adapter->request_event = OpenEventW(EVENT_MODIFY_STATE | SYNCHRONIZE, FALSE,
-                                            kRequestEventName);
-        adapter->completion_event = OpenEventW(EVENT_MODIFY_STATE | SYNCHRONIZE, FALSE,
-                                               kCompletionEventName);
-        if (adapter->request_event && adapter->completion_event && adapter->shared &&
+        if (state_valid(adapter->shared) &&
             InterlockedCompareExchange(&adapter->shared->service_alive, 1, 1) == 1) {
             break;
         }
-        if (adapter->completion_event) { CloseHandle(adapter->completion_event); adapter->completion_event = nullptr; }
-        if (adapter->request_event) { CloseHandle(adapter->request_event); adapter->request_event = nullptr; }
         Sleep(25);
     }
-    if (!adapter->shared || !adapter->request_event || !adapter->completion_event ||
-        adapter->shared->magic != kMagic || adapter->shared->version != kVersion ||
+    if (!state_valid(adapter->shared) ||
         InterlockedCompareExchange(&adapter->shared->service_alive, 1, 1) != 1) {
         CloseTransport(adapter);
         return HRESULT_FROM_WIN32(ERROR_SERVICE_NOT_ACTIVE);
     }
 
-    const uint64_t sequence = GetTickCount64() | (1ull << 63u);
-    const Message ping = make_message(sequence, Opcode::Ping);
-    if (!try_push(&adapter->shared->requests, ping)) {
+    adapter->generation = static_cast<uint64_t>(InterlockedCompareExchange64(
+        &adapter->shared->connection_generation, 0, 0));
+    const int registered = register_client(adapter->shared, adapter->owner_pid,
+                                           adapter->generation);
+    if (registered < 0) {
+        CloseTransport(adapter);
+        return HRESULT_FROM_WIN32(ERROR_TOO_MANY_SESS);
+    }
+    adapter->client_slot = static_cast<uint32_t>(registered);
+    adapter->request_event = OpenEventW(EVENT_MODIFY_STATE | SYNCHRONIZE, FALSE,
+                                        kRequestEventName);
+    wchar_t completion_name[96]{};
+    completion_event_name(adapter->client_slot, completion_name,
+                          _countof(completion_name));
+    adapter->completion_event = OpenEventW(EVENT_MODIFY_STATE | SYNCHRONIZE, FALSE,
+                                           completion_name);
+    if (!adapter->request_event || !adapter->completion_event) {
+        CloseTransport(adapter);
+        return HRESULT_FROM_WIN32(ERROR_SERVICE_NOT_ACTIVE);
+    }
+
+    const uint64_t sequence = next_sequence(adapter->shared);
+    const Message ping = make_message(adapter->generation, sequence,
+                                      adapter->owner_pid, adapter->client_slot,
+                                      Opcode::Ping);
+    if (!PushRequest(adapter, ping, 2000)) {
         CloseTransport(adapter);
         return HRESULT_FROM_WIN32(ERROR_BUSY);
     }
-    SetEvent(adapter->request_event);
+
+    ClientChannel* channel = &adapter->shared->clients[adapter->client_slot];
     const ULONGLONG deadline = GetTickCount64() + 2000;
     while (GetTickCount64() < deadline) {
         Message completion{};
-        while (try_pop(&adapter->shared->completions, &completion)) {
-            if (completion.sequence == sequence && valid(completion) &&
+        while (try_pop(&channel->completions, &completion)) {
+            if (completion.sequence == sequence &&
+                valid_for_generation(completion, adapter->generation) &&
+                completion.owner_pid == adapter->owner_pid &&
+                completion.client_slot == adapter->client_slot &&
                 completion.status == static_cast<int32_t>(Status::Ok)) {
                 return S_OK;
             }

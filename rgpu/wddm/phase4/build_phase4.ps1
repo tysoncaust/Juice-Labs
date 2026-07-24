@@ -6,12 +6,12 @@ $package = Join-Path $phase 'package'
 $out = Join-Path $phase 'out'
 New-Item -ItemType Directory -Force -Path $package, $out | Out-Null
 
-$requiredPhase3 = @('RemoteGpuKmd.sys','RemoteGpuUmd.dll','rgpu_transport_service.exe')
+$requiredPhase3 = @('RemoteGpuDxgkKmd.sys','RemoteGpuUmd.dll','rgpu_transport_service.exe')
 foreach ($name in $requiredPhase3) {
     $source = Join-Path $phase3out $name
     if (-not (Test-Path $source)) { throw "Phase 3 output missing: $source" }
 }
-Copy-Item -Force (Join-Path $phase3out 'RemoteGpuKmd.sys') (Join-Path $package 'RemoteGpuKmd.sys')
+Copy-Item -Force (Join-Path $phase3out 'RemoteGpuDxgkKmd.sys') (Join-Path $package 'RemoteGpuKmd.sys')
 Copy-Item -Force (Join-Path $phase3out 'RemoteGpuUmd.dll') (Join-Path $package 'RemoteGpuUmd.dll')
 Copy-Item -Force (Join-Path $phase3out 'rgpu_transport_service.exe') (Join-Path $package 'RgpuTransportService.exe')
 Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $package 'production-ready.marker'), (Join-Path $package 'RemoteGpuRoot.cat')
@@ -45,6 +45,7 @@ $summary = @(
     'PHASE4_INSTALLER_BUILD=PASS'
     'PHASE4_UNINSTALLER_BUILD=PASS'
     'CATALOG_GENERATION=PASS_UNSIGNED'
+    'PACKAGED_KERNEL_BINARY=DXGK_RENDER_MINIPORT_SCAFFOLD'
     'PRODUCTION_SIGNATURE=BLOCKED_EXTERNAL_CERTIFICATE_AND_SUBMISSION'
     'PACKAGE_VALIDATION=PASS_FAIL_CLOSED_UNSIGNED_OR_INCOMPLETE'
     'NON_ELEVATED_UNINSTALL=PASS_FAIL_CLOSED'

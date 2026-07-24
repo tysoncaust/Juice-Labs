@@ -5,14 +5,23 @@
 #define IOCTL_RGPU_QUERY_ABI CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_READ_ACCESS)
 
 #define RGPU_KMD_MAGIC 0x33444D4Bu /* KMD3 */
-#define RGPU_KMD_VERSION 1u
-#define RGPU_QUEUE_CAPACITY 16u
+#define RGPU_KMD_VERSION 2u
+#define RGPU_CONTROL_CAPACITY 256u
+#define RGPU_CLIENT_CHANNELS 16u
+#define RGPU_CLIENT_COMPLETION_CAPACITY 128u
+#define RGPU_BULK_ARENA_BYTES (8u * 1024u * 1024u)
 
 typedef struct _RGPU_KMD_ABI {
     ULONG Magic;
     ULONG Version;
     ULONG StructureBytes;
-    ULONG QueueCapacity;
+    ULONG ControlQueueCapacity;
+    ULONG ClientChannelCount;
+    ULONG ClientCompletionCapacity;
+    ULONG BulkArenaBytes;
+    ULONG ConnectionGenerationSupported;
+    ULONG AsyncFenceCompletionSupported;
+    ULONG ProcessOwnershipEnforced;
     ULONG NetworkOperationsInKernel;
     ULONG BlockingNetworkWaitsInCallbacks;
 } RGPU_KMD_ABI;
@@ -58,7 +67,13 @@ NTSTATUS RgpuDeviceControl(PDEVICE_OBJECT DeviceObject, PIRP Irp)
         abi->Magic = RGPU_KMD_MAGIC;
         abi->Version = RGPU_KMD_VERSION;
         abi->StructureBytes = sizeof(*abi);
-        abi->QueueCapacity = RGPU_QUEUE_CAPACITY;
+        abi->ControlQueueCapacity = RGPU_CONTROL_CAPACITY;
+        abi->ClientChannelCount = RGPU_CLIENT_CHANNELS;
+        abi->ClientCompletionCapacity = RGPU_CLIENT_COMPLETION_CAPACITY;
+        abi->BulkArenaBytes = RGPU_BULK_ARENA_BYTES;
+        abi->ConnectionGenerationSupported = 1;
+        abi->AsyncFenceCompletionSupported = 1;
+        abi->ProcessOwnershipEnforced = 1;
         abi->NetworkOperationsInKernel = 0;
         abi->BlockingNetworkWaitsInCallbacks = 0;
     }

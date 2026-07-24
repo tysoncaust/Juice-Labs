@@ -40,17 +40,22 @@ function Invoke-Checked([string]$File, [string[]]$Arguments) {
     if ($LASTEXITCODE -ne 0) { throw "$File failed with exit code $LASTEXITCODE" }
 }
 
-Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $out 'rgpu_transport_service.exe'), (Join-Path $out 'rgpu_phase3_client.exe'), (Join-Path $out 'RemoteGpuUmd.dll'), (Join-Path $out 'RemoteGpuUmdTest.exe'), (Join-Path $out 'RemoteGpuKmd.sys'), (Join-Path $out 'phase3-summary.txt'), (Join-Path $out 'service.stdout.txt'), (Join-Path $out 'service.stderr.txt')
+Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $out 'rgpu_transport_service.exe'), (Join-Path $out 'rgpu_phase3_client.exe'), (Join-Path $out 'rgpu_phase3_isolation_client.exe'), (Join-Path $out 'RemoteGpuUmd.dll'), (Join-Path $out 'RemoteGpuUmdTest.exe'), (Join-Path $out 'RemoteGpuKmd.sys'), (Join-Path $out 'RemoteGpuDxgkKmd.sys'), (Join-Path $out 'phase3-summary.txt'), (Join-Path $out 'service.stdout.txt'), (Join-Path $out 'service.stderr.txt'), (Join-Path $out 'isolation-a.stdout.txt'), (Join-Path $out 'isolation-a.stderr.txt'), (Join-Path $out 'isolation-b.stdout.txt'), (Join-Path $out 'isolation-b.stderr.txt')
 
 Invoke-Checked $cl @(
-    '/nologo','/std:c++17','/EHsc','/W4','/WX','/DUNICODE','/D_UNICODE',
+    '/nologo','/std:c++17','/EHsc','/W4','/WX','/wd4324','/DUNICODE','/D_UNICODE',
     (Join-Path $phase 'service\rgpu_transport_service.cpp'),
     "/Fe:$out\rgpu_transport_service.exe"
 )
 Invoke-Checked $cl @(
-    '/nologo','/std:c++17','/EHsc','/W4','/WX',
+    '/nologo','/std:c++17','/EHsc','/W4','/WX','/wd4324',
     (Join-Path $phase 'client\rgpu_phase3_client.cpp'),
     "/Fe:$out\rgpu_phase3_client.exe"
+)
+Invoke-Checked $cl @(
+    '/nologo','/std:c++17','/EHsc','/W4','/WX','/wd4324',
+    (Join-Path $phase 'client\rgpu_phase3_isolation_client.cpp'),
+    "/Fe:$out\rgpu_phase3_isolation_client.exe"
 )
 
 $umdIncludes = @(
@@ -58,14 +63,14 @@ $umdIncludes = @(
     "/I$sdkIncludeRoot\um", "/I$sdkIncludeRoot\shared", "/I$sdkIncludeRoot\ucrt"
 )
 Invoke-Checked $cl (@(
-    '/nologo','/std:c++17','/EHsc','/W4','/WX','/wd4201','/LD','/DUNICODE','/D_UNICODE',
+    '/nologo','/std:c++17','/EHsc','/W4','/WX','/wd4201','/wd4324','/LD','/DUNICODE','/D_UNICODE',
     "/Fo:$out\RemoteGpuUmd.obj"
 ) + $umdIncludes + @(
     (Join-Path $phase 'umd\RemoteGpuUmd.cpp'),
     '/link',"/DEF:$phase\umd\RemoteGpuUmd.def", "/OUT:$out\RemoteGpuUmd.dll", "/IMPLIB:$out\RemoteGpuUmd.lib"
 ))
 Invoke-Checked $cl (@(
-    '/nologo','/std:c++17','/EHsc','/W4','/WX','/wd4201','/DUNICODE','/D_UNICODE',
+    '/nologo','/std:c++17','/EHsc','/W4','/WX','/wd4201','/wd4324','/DUNICODE','/D_UNICODE',
     "/Fo:$out\RemoteGpuUmdTest.obj"
 ) + $umdIncludes + @(
     (Join-Path $phase 'umd\RemoteGpuUmdTest.cpp'),
@@ -73,8 +78,12 @@ Invoke-Checked $cl (@(
 ))
 
 $kernelBuilt = $false
+$dxgkKernelBuilt = $false
 if (-not $SkipKernel) {
-    $kernelIncludes = @("/I$includeRoot\km", "/I$includeRoot\shared")
+    $kernelIncludes = @(
+        "/I$includeRoot\km", "/I$includeRoot\shared",
+        "/I$sdkIncludeRoot\um", "/I$sdkIncludeRoot\shared", "/I$sdkIncludeRoot\ucrt"
+    )
     Invoke-Checked $cl (@(
         '/nologo','/c','/kernel','/W4','/WX','/GS-','/Zl','/D_AMD64_','/D_WIN64',
         "/Fo:$out\RemoteGpuKmd.obj"
@@ -85,14 +94,50 @@ if (-not $SkipKernel) {
         (Join-Path $out 'RemoteGpuKmd.obj'), 'ntoskrnl.lib','hal.lib','BufferOverflowFastFailK.lib'
     )
     $kernelBuilt = Test-Path (Join-Path $out 'RemoteGpuKmd.sys')
+
+    Invoke-Checked $cl (@(
+        '/nologo','/c','/kernel','/W4','/WX','/wd4005','/wd4201','/GS-','/Zl','/D_AMD64_','/D_WIN64',
+        "/Fo:$out\RemoteGpuDxgkKmd.obj"
+    ) + $kernelIncludes + @((Join-Path $phase 'kmd\RemoteGpuDxgkKmd.c')))
+    Invoke-Checked $link @(
+        '/nologo','/driver','/subsystem:native','/entry:DriverEntry','/machine:x64','/nodefaultlib',
+        "/libpath:$libRoot\km\x64", "/out:$out\RemoteGpuDxgkKmd.sys",
+        (Join-Path $out 'RemoteGpuDxgkKmd.obj'), 'displib.lib','ntoskrnl.lib','hal.lib','BufferOverflowFastFailK.lib'
+    )
+    $dxgkKernelBuilt = Test-Path (Join-Path $out 'RemoteGpuDxgkKmd.sys')
 }
 
 $serviceOut = Join-Path $out 'service.stdout.txt'
 $serviceErr = Join-Path $out 'service.stderr.txt'
-$service = Start-Process -FilePath (Join-Path $out 'rgpu_transport_service.exe') -ArgumentList @('--requests','4') -PassThru -RedirectStandardOutput $serviceOut -RedirectStandardError $serviceErr
+$service = Start-Process -FilePath (Join-Path $out 'rgpu_transport_service.exe') -ArgumentList @('--idle-timeout-ms','30000') -PassThru -RedirectStandardOutput $serviceOut -RedirectStandardError $serviceErr
 Start-Sleep -Milliseconds 250
 
 Invoke-Checked (Join-Path $out 'RemoteGpuUmdTest.exe') @((Join-Path $out 'RemoteGpuUmd.dll'))
+
+$isolationAOut = Join-Path $out 'isolation-a.stdout.txt'
+$isolationAErr = Join-Path $out 'isolation-a.stderr.txt'
+$isolationBOut = Join-Path $out 'isolation-b.stdout.txt'
+$isolationBErr = Join-Path $out 'isolation-b.stderr.txt'
+$isolationA = Start-Process -FilePath (Join-Path $out 'rgpu_phase3_isolation_client.exe') -PassThru -RedirectStandardOutput $isolationAOut -RedirectStandardError $isolationAErr
+$isolationB = Start-Process -FilePath (Join-Path $out 'rgpu_phase3_isolation_client.exe') -PassThru -RedirectStandardOutput $isolationBOut -RedirectStandardError $isolationBErr
+foreach ($client in @($isolationA, $isolationB)) {
+    if (-not $client.WaitForExit(15000)) {
+        Stop-Process -Id $client.Id -Force -ErrorAction SilentlyContinue
+        throw 'Concurrent Phase 3 isolation client timed out'
+    }
+    $client.Refresh()
+}
+$isolationAText = [string](Get-Content $isolationAOut -Raw -ErrorAction SilentlyContinue)
+$isolationBText = [string](Get-Content $isolationBOut -Raw -ErrorAction SilentlyContinue)
+$isolationAError = [string](Get-Content $isolationAErr -Raw -ErrorAction SilentlyContinue)
+$isolationBError = [string](Get-Content $isolationBErr -Raw -ErrorAction SilentlyContinue)
+if ($isolationAText -notmatch 'PHASE3_ISOLATION_CLIENT=PASS' -or
+    $isolationBText -notmatch 'PHASE3_ISOLATION_CLIENT=PASS' -or
+    -not [string]::IsNullOrWhiteSpace($isolationAError) -or
+    -not [string]::IsNullOrWhiteSpace($isolationBError)) {
+    throw "Concurrent Phase 3 isolation failed`nA:$isolationAText`n$isolationAError`nB:$isolationBText`n$isolationBError"
+}
+
 Invoke-Checked (Join-Path $out 'rgpu_phase3_client.exe') @()
 if (-not $service.WaitForExit(10000)) {
     Stop-Process -Id $service.Id -Force -ErrorAction SilentlyContinue
@@ -105,20 +150,36 @@ if ($serviceText -notmatch 'PHASE3_SERVICE=PASS') {
 }
 
 $summary = @(
-    'PHASE3_TRANSPORT=PASS'
-    'BOUNDED_SHARED_MEMORY_QUEUES=PASS capacity=16'
+    'PHASE3_TRANSPORT_V2=PASS'
+    'MPMC_CONTROL_RING=PASS capacity=256'
+    'PER_PROCESS_COMPLETION_CHANNELS=PASS clients=16 capacity_each=128'
+    'SHARED_BULK_ARENA=PASS bytes=8388608 slots=128 slot_bytes=65536'
+    'MULTI_PROCESS_ISOLATION=PASS concurrent_clients=2'
+    'ASYNC_OUTSTANDING_BATCHES=PASS batches=128'
+    'FENCE_VALUE_COMPLETIONS=PASS'
+    'OUT_OF_ORDER_COMPLETION_MATCHING=PASS'
+    'CONNECTION_GENERATION_REJECTION=PASS'
+    'CANCELLATION_RESET_DEVICE_LOST=PASS'
+    'PROCESS_QUOTAS_AND_OBJECT_OWNERSHIP=PASS'
+    'BOUNDED_BACKPRESSURE=PASS'
     'OUT_OF_PROCESS_SERVICE=PASS'
     'UMD_OPENADAPTER12_ABI=PASS'
     'UMD_TO_SERVICE_ROUNDTRIP=PASS'
     'UMD_CREATE_DEVICE=FAIL_CLOSED_NOT_IMPLEMENTED'
     "KERNEL_BROKER_BUILD=$([string]$(if ($kernelBuilt) {'PASS'} else {'SKIPPED'}))"
+    "DXGK_RENDER_MINIPORT_SCAFFOLD_BUILD=$([string]$(if ($dxgkKernelBuilt) {'PASS'} else {'SKIPPED'}))"
+    'DXGK_REGISTER_PATH=DxgkInitialize'
+    'DXGK_DISPLAY_CHILDREN=0'
+    'DXGK_RESOURCE_AND_SUBMISSION_PATHS=FAIL_CLOSED_NOT_IMPLEMENTED'
     'KERNEL_NETWORK_OPERATIONS=0'
     'KERNEL_BLOCKING_NETWORK_WAITS=0'
-    'ROOT_ENUMERATED_RENDER_ADAPTER=NOT_COMPLETE'
+    'ROOT_ENUMERATED_RENDER_ADAPTER=BUILD_ONLY_NOT_LIVE_TESTED'
     'D3D12_GRAPHICS_DDI_BODY=NOT_COMPLETE'
     "WDK_PACKAGE=$($wdk.Name)"
 )
 $summary | Set-Content -Encoding utf8 (Join-Path $out 'phase3-summary.txt')
 $summary | ForEach-Object { Write-Output $_ }
+Write-Output ($isolationAText.Trim())
+Write-Output ($isolationBText.Trim())
 Write-Output ($serviceText.Trim())
-Remove-Item -Force -ErrorAction SilentlyContinue $serviceOut, $serviceErr
+Remove-Item -Force -ErrorAction SilentlyContinue $serviceOut, $serviceErr, $isolationAOut, $isolationAErr, $isolationBOut, $isolationBErr

@@ -25,3 +25,12 @@ profile.coverage
 /rgpu/wddm/phase4/package/*.sys
 /rgpu/wddm/phase4/package/*.cat
 /rgpu/wddm/phase4/out/*.exe
+
+# Native/Colab Phase 2 reproducible binaries and frame payloads
+/rgpu/renderd/linux/phase2/out-native/*.exe
+/rgpu/renderd/linux/phase2/out-native/*.spv
+/rgpu/renderd/linux/phase2/out-native/*.rgba
+/rgpu/renderd/linux/phase2/out-native/*.h264
+/rgpu/renderd/linux/phase2/out-colab/
+/rgpu/wddm/phase3/out/RemoteGpuDxgkKmd.sys
+/rgpu/wddm/phase3/out/RemoteGpuDxgkKmd.obj
