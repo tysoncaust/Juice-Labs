@@ -1,0 +1,96 @@
+﻿{
+    "schema_version":  "1.0",
+    "project_commit":  "7a82eb1d682157c06aacabacd08b94f46faff650",
+    "binary_sha256":  "d43389ce35cb84eb31f84ed7c629f3c532254b3bd86e787d333a1cba99041a52",
+    "test_id":  "95b5e83a-e576-4a53-810b-87096fbb26aa",
+    "test_date_utc":  "2026-07-24T13:32:18.8721134Z",
+    "operator":  "automated-transport-only",
+    "mode":  "passive",
+    "game":  {
+                 "name":  "Destiny 2",
+                 "version":  null,
+                 "anti_cheat":  "BattlEye",
+                 "anti_cheat_version":  null
+             },
+    "environment":  {
+                        "windows_build":  "10.0.26200 build 26200",
+                        "gpu":  "NVIDIA GeForce RTX 3050 Laptop GPU",
+                        "driver":  "610.74",
+                        "capture_backend":  "Windows GDI desktop capture plus WASAPI shared-mode loopback",
+                        "input_mode":  "disabled",
+                        "launcher":  "Steam",
+                        "host_agent_version":  "prerelease-7a82eb1d6821"
+                    },
+    "results":  {
+                    "real_wasapi_capture":  "pass",
+                    "encrypted_srt_transport":  "pass",
+                    "incorrect_key_rejection":  "pass",
+                    "session_reconnection":  "pass",
+                    "resolution_renegotiation":  "pass",
+                    "srt_impairment_smoke_3pct_50ms":  "pass_one_seed_30_seconds",
+                    "srt_full_impairment_matrix":  "not_complete",
+                    "webrtc_pwa_receiver":  "scaffold",
+                    "native_webrtc_sender":  "not_implemented",
+                    "destiny2_passive_observed_compatibility":  "pass_recorded_stack",
+                    "destiny2_manual_gameplay":  "not_tested",
+                    "destiny2_matchmaking":  "not_tested",
+                    "destiny2_interactive_remote_input":  "not_tested",
+                    "independent_review":  "not_complete",
+                    "signed_build_provenance":  "workflow_configured_not_run"
+                },
+    "artifacts":  [
+                      {
+                          "name":  "rgpu-streaming-passive-prerelease.zip",
+                          "sha256":  "d43389ce35cb84eb31f84ed7c629f3c532254b3bd86e787d333a1cba99041a52",
+                          "media_retained":  false
+                      },
+                      {
+                          "name":  "sbom.spdx.json",
+                          "sha256":  "70e6c4c24c288917117c0d9a1f0cab9eba34217f86e2e602cb148f195370e667",
+                          "media_retained":  false
+                      },
+                      {
+                          "name":  "srt-sender-720p-latest.json",
+                          "sha256":  "33a82c5a6a1d00fe83594c163d5cba67f661ba11d40fea8c384ca01fefbe4955",
+                          "media_retained":  false
+                      },
+                      {
+                          "name":  "srt-receiver-720p-latest.json",
+                          "sha256":  "f542891db9b672a8d44248b2b68b16cda560ddd8e3184921d01f8c58dc5a425b",
+                          "media_retained":  false
+                      },
+                      {
+                          "name":  "srt-wrong-key-rejection-latest.json",
+                          "sha256":  "79f4cb71e1acd23afe950d5e2c2921ac74f9f436422f2c39694ec2d02e968db5",
+                          "media_retained":  false
+                      },
+                      {
+                          "name":  "srt-reconnect-resolution-latest.json",
+                          "sha256":  "e99fdc72a6eaae2419140c39f0059b36db3dc0dda9dc07dc8337734f3779fe00",
+                          "media_retained":  false
+                      },
+                      {
+                          "name":  "srt-impairment-3pct-50ms-smoke-latest.json",
+                          "sha256":  "7f4820fbbf4f5d1a700ff9f37ec6cba4900cc8a83863f804227408133d5d64ab",
+                          "media_retained":  false
+                      },
+                      {
+                          "name":  "wasapi-real-endpoint-latest.json",
+                          "sha256":  "0920027dda68ed5dccb4cb84282f13bdd21efa7a9c2a4c3d9dd75af20930036f",
+                          "media_retained":  false
+                      }
+                  ],
+    "limitations":  [
+                        "This manifest binds an unsigned local prerelease archive; GitHub attestations and signed release publication have not run.",
+                        "The SRT impairment observation is a 30-second one-seed smoke, not the ten-minute three-seed release matrix.",
+                        "The WebRTC PWA and signaling relay are implemented, but the native Windows WebRTC media sender is not implemented.",
+                        "Startup-to-decoder timing exists; capture-to-compositor and physical input-to-photon latency are not measured.",
+                        "Destiny 2 manual gameplay, matchmaking, PvP and interactive remote input were not tested.",
+                        "Compatibility is observational and version-specific. Vendor approval is not required or claimed."
+                    ],
+    "claims":  {
+                   "vendor_approval":  false,
+                   "vendor_endorsement":  false,
+                   "universal_anti_cheat_compatibility":  false
+               }
+}
