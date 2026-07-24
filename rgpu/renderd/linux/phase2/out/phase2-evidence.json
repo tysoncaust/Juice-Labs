@@ -1,0 +1,37 @@
+{
+  "backend": "Vulkan",
+  "center_pixel_rgba": [
+    129,
+    48,
+    220,
+    255
+  ],
+  "command_buffers_submitted": 1,
+  "compressed_bytes": 2102,
+  "compressed_codec": "h264",
+  "compressed_encoder": "h264_nvenc",
+  "compressed_frame_return": true,
+  "compressed_sha256": "36257e0e20240479a89760fcd65f42e5c1222131151b8234062b9a368d3d2be0",
+  "corner_pixel_rgba": [
+    0,
+    48,
+    220,
+    255
+  ],
+  "descriptor_sets_reconstructed": 1,
+  "draw_calls": 1,
+  "elapsed_ms": 351.042,
+  "fence_completed": true,
+  "frame_crc32": "8013bd51",
+  "frame_height": 256,
+  "frame_non_uniform": true,
+  "frame_width": 256,
+  "gpu": "llvmpipe (LLVM 21.1.8, 256 bits)",
+  "graphics_pipeline_created": true,
+  "hardware_vulkan": false,
+  "phase": 2,
+  "physical_device_type": 4,
+  "resource_creation": true,
+  "shader_modules": 2,
+  "upload_heap_bytes": 16384
+}

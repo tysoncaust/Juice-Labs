@@ -4,3 +4,24 @@
 **/juicecache
 profile.coverage
 /bin/
+
+# Local SDKs, WDKs and upstream reference samples
+/external/
+
+# Reproducible RemoteGPU build products
+/rgpu/renderd/linux/phase2/out/phase2_executor
+/rgpu/renderd/linux/phase2/out/*.spv
+/rgpu/renderd/linux/phase2/out/*.rgba
+/rgpu/renderd/linux/phase2/out/*.h264
+/rgpu/renderd/linux/phase2/out/run.log
+/rgpu/wddm/phase3/out/*.exe
+/rgpu/wddm/phase3/out/*.dll
+/rgpu/wddm/phase3/out/*.lib
+/rgpu/wddm/phase3/out/*.exp
+/rgpu/wddm/phase3/out/*.obj
+/rgpu/wddm/phase3/out/*.sys
+/rgpu/wddm/phase4/package/*.exe
+/rgpu/wddm/phase4/package/*.dll
+/rgpu/wddm/phase4/package/*.sys
+/rgpu/wddm/phase4/package/*.cat
+/rgpu/wddm/phase4/out/*.exe

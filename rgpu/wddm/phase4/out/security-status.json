@@ -1,0 +1,11 @@
+﻿{
+    "collected_utc":  "2026-07-24T03:25:27.1965743Z",
+    "secure_boot_enabled":  null,
+    "secure_boot_query_error":  "Unable to set proper privileges. Access was denied.",
+    "hvci_configured":  false,
+    "hvci_running":  false,
+    "virtualization_based_security_status":  2,
+    "device_guard_query_error":  null,
+    "test_signing_required_by_package":  false,
+    "production_policy_pass":  false
+}

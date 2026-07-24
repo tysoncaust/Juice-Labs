@@ -1,0 +1,54 @@
+[Version]
+Signature="$WINDOWS NT$"
+Class=Display
+ClassGuid={4d36e968-e325-11ce-bfc1-08002be10318}
+Provider=%Provider%
+DriverVer=07/24/2026,0.0.4.0
+CatalogFile=RemoteGpuRoot.cat
+PnpLockdown=1
+
+[Manufacturer]
+%Manufacturer%=Models,NTamd64
+
+[Models.NTamd64]
+%DeviceDesc%=RemoteGpu_Install,Root\RemoteGpuRender
+
+[RemoteGpu_Install.NT]
+CopyFiles=RemoteGpu_CopyFiles
+
+[RemoteGpu_Install.NT.HW]
+AddReg=RemoteGpu_AdapterReg
+
+[RemoteGpu_Install.NT.Services]
+AddService=RemoteGpuKmd,0x00000002,RemoteGpu_Service
+
+[RemoteGpu_Service]
+DisplayName=%ServiceDesc%
+ServiceType=1
+StartType=3
+ErrorControl=1
+ServiceBinary=%12%\RemoteGpuKmd.sys
+
+[RemoteGpu_AdapterReg]
+HKR,,UserModeDriverName,0x00010000,"RemoteGpuUmd.dll"
+
+[RemoteGpu_CopyFiles]
+RemoteGpuKmd.sys
+RemoteGpuUmd.dll
+
+[DestinationDirs]
+RemoteGpu_CopyFiles=12
+
+[SourceDisksNames]
+1=%DiskName%,,,
+
+[SourceDisksFiles]
+RemoteGpuKmd.sys=1
+RemoteGpuUmd.dll=1
+
+[Strings]
+Provider="Juice Labs"
+Manufacturer="Juice Labs"
+DeviceDesc="RemoteGPU Render-Only Adapter"
+ServiceDesc="RemoteGPU Kernel Miniport"
+DiskName="RemoteGPU Driver Package"

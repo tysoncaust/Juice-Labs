@@ -1,0 +1,20 @@
+{
+  "phase": 4,
+  "production_ready": false,
+  "test_signing_required": false,
+  "driver_graphics_ddi_complete": false,
+  "root_enumerated_adapter_live_tested": false,
+  "microsoft_production_signature_present": false,
+  "ev_certificate_available": false,
+  "hardware_developer_program_submission_complete": false,
+  "hlk_playlist_passed": false,
+  "hvci_running_on_current_host": false,
+  "secure_boot_verified_on_current_host": false,
+  "installer_built": true,
+  "installer_fail_closed": true,
+  "uninstaller_built": true,
+  "service_and_network_endpoints_documented": true,
+  "game_vendor_testing_complete": false,
+  "anti_cheat_vendor_testing_complete": false,
+  "release_marker_permitted": false
+}
