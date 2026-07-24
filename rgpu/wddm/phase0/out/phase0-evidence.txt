@@ -1,0 +1,6 @@
+timestamp=2026-07-24T02:16:21.0990671Z
+wdk_headers_present=False
+inf_static_validation=PASS
+presentation_selftest=PASS
+driver_installed=NO
+reason=Unsigned placeholder driver package is never installed by Phase 0 build
