@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' wss: https:; media-src 'self' blob:; script-src 'self'; style-src 'self'; img-src 'self' data:">
+  <link rel="icon" href="data:,">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+  <title>RemoteGPU Passive Receiver</title>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>RemoteGPU Passive Receiver</h1>
+      <span id="mode">PASSIVE · INPUT UNAVAILABLE</span>
+    </header>
+    <video id="remoteVideo" autoplay playsinline controls aria-label="Remote video and audio"></video>
+    <form id="sessionForm" autocomplete="off">
+      <label>Signalling URL
+        <input id="signalUrl" name="signalUrl" type="url" value="wss://localhost:8443/session" required>
+      </label>
+      <label>Session token
+        <input id="token" name="token" type="password" autocomplete="off" minlength="16" required>
+      </label>
+      <button id="connect" type="submit">Connect passive session</button>
+      <button id="disconnect" type="button" disabled>Disconnect</button>
+    </form>
+    <pre id="status" aria-live="polite"></pre>
+    <pre id="stats" aria-live="polite"></pre>
+  </main>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

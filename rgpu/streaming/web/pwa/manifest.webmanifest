@@ -1,0 +1,9 @@
+{
+  "name": "RemoteGPU Passive Receiver",
+  "short_name": "RGPU Passive",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#111111",
+  "theme_color": "#183b2b",
+  "description": "Passive video/audio receiver. Remote input is not included."
+}
