@@ -1,0 +1,22 @@
+{
+  "phase": 2,
+  "backend": "Vulkan",
+  "gpu": "NVIDIA GeForce RTX 3050 Laptop GPU",
+  "physical_device_type": 2,
+  "hardware_vulkan": true,
+  "resource_creation": true,
+  "shader_modules": 2,
+  "graphics_pipeline_created": true,
+  "upload_heap_bytes": 16384,
+  "descriptor_sets_reconstructed": 1,
+  "command_buffers_submitted": 1,
+  "draw_calls": 1,
+  "fence_completed": true,
+  "frame_width": 256,
+  "frame_height": 256,
+  "frame_crc32": "8013bd51",
+  "frame_non_uniform": true,
+  "corner_pixel_rgba": [0, 48, 220, 255],
+  "center_pixel_rgba": [129, 48, 220, 255],
+  "elapsed_ms": 182.396
+}

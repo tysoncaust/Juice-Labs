@@ -1,0 +1,15 @@
+WARNING: [Loader Message] Code 0 : Layer "VK_LAYER_NV_optimus" forced disabled because name matches filter of env var 'VK_LOADER_LAYERS_DISABLE'.
+WARNING: [Loader Message] Code 0 : Layer "VK_LAYER_NV_present" forced disabled because name matches filter of env var 'VK_LOADER_LAYERS_DISABLE'.
+WARNING: [Loader Message] Code 0 : Layer "VK_LAYER_CHEATHAPPENSLAYER" forced disabled because name matches filter of env var 'VK_LOADER_LAYERS_DISABLE'.
+WARNING: [Loader Message] Code 0 : Layer "VK_LAYER_RENDERDOC_Capture" forced disabled because name matches filter of env var 'VK_LOADER_LAYERS_DISABLE'.
+WARNING: [Loader Message] Code 0 : Layer "VK_LAYER_VALVE_steam_overlay" forced disabled because name matches filter of env var 'VK_LOADER_LAYERS_DISABLE'.
+WARNING: [Loader Message] Code 0 : Layer "VK_LAYER_VALVE_steam_fossilize" forced disabled because name matches filter of env var 'VK_LOADER_LAYERS_DISABLE'.
+WARNING: [Loader Message] Code 0 : Layer "VK_LAYER_LUNARG_api_dump" forced disabled because name matches filter of env var 'VK_LOADER_LAYERS_DISABLE'.
+WARNING: [Loader Message] Code 0 : Layer "VK_LAYER_LUNARG_gfxreconstruct" forced disabled because name matches filter of env var 'VK_LOADER_LAYERS_DISABLE'.
+WARNING: [Loader Message] Code 0 : Layer "VK_LAYER_KHRONOS_synchronization2" forced disabled because name matches filter of env var 'VK_LOADER_LAYERS_DISABLE'.
+WARNING: [Loader Message] Code 0 : Layer "VK_LAYER_KHRONOS_validation" forced disabled because name matches filter of env var 'VK_LOADER_LAYERS_DISABLE'.
+WARNING: [Loader Message] Code 0 : Layer "VK_LAYER_LUNARG_monitor" forced disabled because name matches filter of env var 'VK_LOADER_LAYERS_DISABLE'.
+WARNING: [Loader Message] Code 0 : Layer "VK_LAYER_LUNARG_screenshot" forced disabled because name matches filter of env var 'VK_LOADER_LAYERS_DISABLE'.
+WARNING: [Loader Message] Code 0 : Layer "VK_LAYER_KHRONOS_profiles" forced disabled because name matches filter of env var 'VK_LOADER_LAYERS_DISABLE'.
+WARNING: [Loader Message] Code 0 : Layer "VK_LAYER_KHRONOS_shader_object" forced disabled because name matches filter of env var 'VK_LOADER_LAYERS_DISABLE'.
+WARNING: [Loader Message] Code 0 : Layer "VK_LAYER_LUNARG_crash_diagnostic" forced disabled because name matches filter of env var 'VK_LOADER_LAYERS_DISABLE'.
